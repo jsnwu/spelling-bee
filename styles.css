@@ -1,0 +1,436 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  background: radial-gradient(circle at top left, #111827, #020617);
+  color: #e5e7eb;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.app-shell {
+  max-width: 960px;
+  width: 100%;
+  min-height: 100vh;
+  padding: 24px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin: 0 auto;
+}
+
+.app-header {
+  text-align: left;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 2.4rem;
+  letter-spacing: -0.04em;
+}
+
+.title-bee {
+  margin-left: 0.01em;
+  display: inline-block;
+  /* Baseline alignment so we can nudge the bee up optically (not locked to descenders) */
+  vertical-align: baseline;
+  line-height: 0;
+  font-size: inherit;
+}
+
+/* Scale with the <h1> font size so the bee matches the title on all breakpoints */
+.title-bee-img {
+  display: inline-block;
+  vertical-align: baseline;
+  height: 1.45em;
+  width: auto;
+  object-fit: contain;
+  /* Sit closer to cap-height / “Studio” band; default middle sat too low vs descenders like p */
+  position: relative;
+  top: -0.16em;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: #9ca3af;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 16px;
+  padding: 18px 18px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(18px);
+}
+
+.config-card h2 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+
+.helper-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+.file-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.file-label {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px dashed rgba(148, 163, 184, 0.8);
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), rgba(15, 23, 42, 0.9));
+}
+
+.file-label input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-name {
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.csv-example {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.csv-example pre {
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(55, 65, 81, 0.8);
+  overflow-x: auto;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.mode-button {
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.2), rgba(15, 23, 42, 0.9));
+  color: #e5e7eb;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, border-color 0.08s ease-out,
+    background 0.08s ease-out;
+}
+
+.mode-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.9);
+  border-color: rgba(129, 140, 248, 0.9);
+}
+
+.mode-button.selected {
+  border-color: rgba(56, 189, 248, 0.95);
+  box-shadow: 0 14px 32px rgba(8, 47, 73, 0.9);
+}
+
+.mode-title {
+  display: block;
+  font-weight: 600;
+}
+
+.mode-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.start-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.primary-button,
+.secondary-button,
+.ghost-button {
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #22c55e, #38bdf8);
+  color: #020617;
+  box-shadow: 0 12px 28px rgba(8, 47, 73, 0.85);
+}
+
+.primary-button:disabled {
+  background: linear-gradient(135deg, #4b5563, #374151);
+  color: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.secondary-button {
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+}
+
+#next-word:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+#next-word:not(:disabled) {
+  border-color: rgba(129, 140, 248, 0.85);
+  box-shadow: 0 10px 22px rgba(30, 27, 75, 0.45);
+}
+
+.ghost-button {
+  background: transparent;
+  color: #9ca3af;
+  border: 1px dashed rgba(75, 85, 99, 0.9);
+}
+
+.icon-button {
+  padding-inline: 12px;
+}
+
+.icon-button span {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.status-text {
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.game-card {
+  margin-top: 4px;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.score-pill {
+  border-radius: 999px;
+  padding: 6px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  font-size: 0.85rem;
+  color: #e5e7eb;
+  background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.15), rgba(15, 23, 42, 0.95));
+}
+
+.prompt-area {
+  margin-top: 4px;
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(55, 65, 81, 0.9);
+}
+
+.prompt-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.prompt-content {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.prompt-main-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prompt-main-row > .prompt-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.hint-text {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #a5b4fc;
+}
+
+#audio-prompt-lead {
+  font-size: 1.12rem;
+  line-height: 1.45;
+}
+
+#audio-prompt-lead.audio-prompt-placeholder {
+  min-height: 2.35rem;
+}
+
+#show-hint.show-hint-used:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  color: #6b7280;
+  border-style: solid;
+  border-color: rgba(75, 85, 99, 0.45);
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+#answer-input {
+  flex: 1;
+  border-radius: 999px;
+  padding: 9px 14px;
+  border: 1px solid rgba(75, 85, 99, 0.9);
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
+  font-size: 0.95rem;
+}
+
+#answer-input:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.95);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.8);
+}
+
+.game-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.feedback-text {
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.feedback-correct {
+  color: #4ade80;
+}
+
+.feedback-incorrect {
+  color: #f97373;
+}
+
+.feedback-answer {
+  color: #e5e7eb;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #6b7280;
+  padding-top: 4px;
+  border-top: 1px solid rgba(31, 41, 55, 0.9);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 16px 12px 24px;
+  }
+
+  .app-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #answer-input {
+    width: 100%;
+  }
+
+  .app-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}
+

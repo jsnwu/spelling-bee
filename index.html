@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spelling Bee Game</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <h1>
+          Spelling Bee Studio
+          <span class="title-bee" aria-hidden="true">
+            <img
+              class="title-bee-img"
+              src="assets/bee-icon.png"
+              alt=""
+              decoding="async"
+            />
+          </span>
+        </h1>
+        <p class="subtitle">Upload your word list and start a custom spelling bee.</p>
+      </header>
+
+      <main class="app-main">
+        <section class="card config-card">
+          <h2>1. Load Your Words</h2>
+          <p class="helper-text">
+            Upload a CSV with at least two columns: <strong>word</strong> and <strong>definition</strong>.
+            Optional column: <strong>hint</strong>.
+          </p>
+          <div class="file-input-row">
+            <label class="file-label">
+              <input type="file" id="csv-input" accept=".csv" />
+              <span>Select CSV file</span>
+            </label>
+            <span id="file-name" class="file-name">No file selected</span>
+          </div>
+          <details class="csv-example">
+            <summary>CSV format example</summary>
+            <pre>
+word,definition,hint
+serendipity,The occurrence of events by chance in a happy way,Found by accident
+quixotic,Exceedingly idealistic; unrealistic and impractical,Like Don Quixote
+            </pre>
+          </details>
+          <p id="load-status" class="status-text"></p>
+        </section>
+
+        <section class="card config-card">
+          <h2>2. Choose Game Mode</h2>
+          <div class="mode-grid">
+            <button class="mode-button selected" data-mode="definition">
+              <span class="mode-title">Definition ➜ Spell</span>
+              <span class="mode-desc">See the meaning, then type the word.</span>
+            </button>
+            <button class="mode-button" data-mode="audio">
+              <span class="mode-title">Spoken Word ➜ Spell</span>
+              <span class="mode-desc">Hear the word spoken out loud, then spell it.</span>
+            </button>
+          </div>
+          <p class="helper-text">
+            Audio mode uses your browser's text‑to‑speech engine (no uploads required).
+          </p>
+        </section>
+
+        <section class="card config-card">
+          <h2>3. Start Game</h2>
+          <div class="start-row">
+            <button id="start-game" class="primary-button" disabled>Start Spelling Bee</button>
+            <span id="word-count" class="status-text">0 words loaded</span>
+          </div>
+        </section>
+
+        <section id="game-section" class="card game-card hidden">
+          <header class="game-header">
+            <div>
+              <h2>Spelling Round</h2>
+              <p id="game-mode-label" class="helper-text"></p>
+            </div>
+            <div class="score-pill">
+              <span id="score-text">Score: 0 / 0</span>
+            </div>
+          </header>
+
+          <div id="prompt-area" class="prompt-area">
+            <!-- Filled dynamically -->
+          </div>
+
+          <div class="input-row">
+            <label for="answer-input" class="visually-hidden">Your spelling</label>
+            <input
+              id="answer-input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Type your spelling here…"
+            />
+            <button id="submit-answer" class="primary-button">Submit</button>
+          </div>
+
+          <div class="game-controls">
+            <button id="show-hint" class="ghost-button hidden" type="button">Show hint</button>
+            <button id="show-answer" class="ghost-button">Show Answer</button>
+            <button id="next-word" class="secondary-button">Next Word</button>
+          </div>
+
+          <p id="feedback" class="feedback-text"></p>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <span>Spelling Bee Studio</span>
+        <span>Works offline • No data leaves your browser</span>
+      </footer>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+  </html>
+
