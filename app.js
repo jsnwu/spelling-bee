@@ -40,10 +40,10 @@ const state = {
   definitionForSpeech: "",
   /** Timeout id for scheduled auto-speak */
   autoSpeakTimeoutId: null,
-  /** After a correct answer, one more Enter goes to next word */
-  awaitingNextAfterCorrect: false,
-  /** Must submit a spelling once before Next / skip is allowed */
+  /** At least one graded submit this word — enables Next (skip) */
   hasSubmittedThisWord: false,
+  /** Correct answer submitted — input locked; prevents duplicate scoring */
+  answerLocked: false,
   /** Concise definition for audio mode; shown only after "Show hint" */
   audioHintDefinition: "",
 };
@@ -201,8 +201,8 @@ function renderPrompt() {
   }
 
   // New prompt, reset enter/next state
-  state.awaitingNextAfterCorrect = false;
   state.hasSubmittedThisWord = false;
+  state.answerLocked = false;
 
   const word = (entry.word || entry.term || "").trim();
   // In our default CSV, "Sentense" is the full sentence prompt, and "Definition" is a concise meaning.
@@ -318,7 +318,7 @@ function updateScore(correct) {
 function handleSubmitAnswer() {
   const entry = currentWord();
   if (!entry) return;
-  if (state.hasSubmittedThisWord) return;
+  if (state.answerLocked) return;
 
   const userAnswer = dom.answerInput.value.trim().toLowerCase();
   const correctWord = String(entry.word || entry.term || "").trim();
@@ -328,21 +328,23 @@ function handleSubmitAnswer() {
 
   state.hasSubmittedThisWord = true;
   if (dom.nextWord) dom.nextWord.disabled = false;
-  dom.submitAnswer.disabled = true;
-  dom.answerInput.disabled = true;
 
   const isCorrect = userAnswer === correctLower;
   updateScore(isCorrect);
 
   if (isCorrect) {
-    state.awaitingNextAfterCorrect = true;
+    state.answerLocked = true;
+    dom.submitAnswer.disabled = true;
+    dom.answerInput.disabled = true;
     dom.feedback.textContent = `Correct! ${correctWord}`;
     dom.feedback.className = "feedback-text feedback-correct";
     playCorrectDing();
   } else {
-    state.awaitingNextAfterCorrect = false;
-    dom.feedback.textContent = `Not quite. You typed "${userAnswer}", the correct spelling is "${correctWord}".`;
+    dom.submitAnswer.disabled = false;
+    dom.answerInput.disabled = false;
+    dom.feedback.textContent = `Not quite. You typed "${userAnswer}", the correct spelling is "${correctWord}". Try again, or use Next to skip.`;
     dom.feedback.className = "feedback-text feedback-incorrect";
+    dom.answerInput.focus();
   }
 }
 
@@ -357,7 +359,6 @@ function showCorrectAnswer() {
 function goToNextWord() {
   if (!state.hasSubmittedThisWord) return;
   if (state.currentIndex < state.words.length - 1) {
-    state.awaitingNextAfterCorrect = false;
     state.currentIndex += 1;
     renderPrompt();
     scheduleAutoSpeak(1000);
@@ -451,18 +452,29 @@ dom.submitAnswer.addEventListener("click", () => {
 dom.answerInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    if (state.awaitingNextAfterCorrect) {
-      // Consume one Enter to advance, then reset the flag
-      state.awaitingNextAfterCorrect = false;
+    if (state.answerLocked) {
       goToNextWord();
     } else {
       handleSubmitAnswer();
     }
+    e.stopPropagation();
   }
 });
 
 // Global keyboard shortcuts
 window.addEventListener("keydown", (e) => {
+  // Enter: go to next word only after a correct answer (input locked); wrong answers use Enter to resubmit
+  if (e.key === "Enter") {
+    if (e.defaultPrevented) return;
+    if (dom.gameSection.classList.contains("hidden")) return;
+    if (!state.answerLocked) return;
+    if (dom.nextWord.disabled) return;
+    const t = e.target;
+    if (t && t.tagName === "INPUT" && t.type === "file") return;
+    if (t && typeof t.closest === "function" && t.closest("button")) return;
+    e.preventDefault();
+    goToNextWord();
+  }
   // Right arrow: go to next word (when game section is visible)
   if (e.key === "ArrowRight") {
     // Let Right Arrow move the caret while editing the answer field
