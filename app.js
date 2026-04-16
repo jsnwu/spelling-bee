@@ -318,6 +318,7 @@ function updateScore(correct) {
 function handleSubmitAnswer() {
   const entry = currentWord();
   if (!entry) return;
+  if (state.hasSubmittedThisWord) return;
 
   const userAnswer = dom.answerInput.value.trim().toLowerCase();
   const correctWord = String(entry.word || entry.term || "").trim();
@@ -327,6 +328,8 @@ function handleSubmitAnswer() {
 
   state.hasSubmittedThisWord = true;
   if (dom.nextWord) dom.nextWord.disabled = false;
+  dom.submitAnswer.disabled = true;
+  dom.answerInput.disabled = true;
 
   const isCorrect = userAnswer === correctLower;
   updateScore(isCorrect);

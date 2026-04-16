@@ -88,6 +88,68 @@ body {
   font-size: 1.1rem;
 }
 
+/* Step 1: collapsed by default so setup copy is optional */
+.config-details {
+  margin: 0;
+}
+
+.config-details-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  user-select: none;
+}
+
+.config-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.config-details-summary::marker {
+  content: "";
+}
+
+.config-details-summary-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.config-details-heading {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.config-details-summary-hint {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #9ca3af;
+  line-height: 1.35;
+}
+
+.config-details-chevron {
+  flex-shrink: 0;
+  width: 0.5em;
+  height: 0.5em;
+  margin-top: 0.28em;
+  border-right: 2px solid rgba(156, 163, 175, 0.85);
+  border-bottom: 2px solid rgba(156, 163, 175, 0.85);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.config-details[open] .config-details-chevron {
+  transform: rotate(-135deg);
+  margin-top: 0.42em;
+}
+
+.config-details-body {
+  margin-top: 12px;
+  padding-top: 2px;
+  border-top: 1px solid rgba(55, 65, 81, 0.55);
+}
+
 .helper-text {
   margin: 0;
   font-size: 0.9rem;

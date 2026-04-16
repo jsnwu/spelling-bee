@@ -25,30 +25,40 @@
 
       <main class="app-main">
         <section class="card config-card">
-          <h2>1. Load Your Words</h2>
-          <p class="helper-text">
-            Upload a CSV with a <strong>word</strong> column (the spelling answer) and a full-sentence clue:
-            <strong>sentense</strong> or <strong>sentence</strong> (or <strong>meaning</strong>). Add
-            <strong>definition</strong> for the short meaning (used in spoken-word mode). Column
-            <strong>pronounce</strong> is optional. If you do not upload a file, <strong>words/words.csv</strong> is
-            loaded when available.
-          </p>
-          <div class="file-input-row">
-            <label class="file-label">
-              <input type="file" id="csv-input" accept=".csv" />
-              <span>Select CSV file</span>
-            </label>
-            <span id="file-name" class="file-name">No file selected</span>
-          </div>
-          <details class="csv-example">
-            <summary>CSV format example</summary>
-            <pre>
+          <details class="config-details">
+            <summary class="config-details-summary">
+              <div class="config-details-summary-text">
+                <h2 class="config-details-heading">1. Load Your Words</h2>
+                <span class="config-details-summary-hint">Optional — default list loads automatically</span>
+              </div>
+              <span class="config-details-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="config-details-body">
+              <p class="helper-text">
+                Upload a CSV with a <strong>word</strong> column (the spelling answer) and a full-sentence clue:
+                <strong>sentense</strong> or <strong>sentence</strong> (or <strong>meaning</strong>). Add
+                <strong>definition</strong> for the short meaning (used in spoken-word mode). Column
+                <strong>pronounce</strong> is optional. If you do not upload a file, <strong>words/words.csv</strong> is
+                loaded when available.
+              </p>
+              <div class="file-input-row">
+                <label class="file-label">
+                  <input type="file" id="csv-input" accept=".csv" />
+                  <span>Select CSV file</span>
+                </label>
+                <span id="file-name" class="file-name">No file selected</span>
+              </div>
+              <details class="csv-example">
+                <summary>CSV format example</summary>
+                <pre>
 word,sentense,pronounce,definition
 Apple,"I ate a red apple for lunch.",AP-uhl,"A round fruit with firm flesh"
 Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
-            </pre>
+                </pre>
+              </details>
+              <p id="load-status" class="status-text"></p>
+            </div>
           </details>
-          <p id="load-status" class="status-text"></p>
         </section>
 
         <section class="card config-card">
