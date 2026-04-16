@@ -51,6 +51,11 @@ const state = {
 const SUBMIT_BUTTON_LABEL = "Submit";
 const SUBMIT_BUTTON_NEXT_LABEL = ">>";
 
+/** Default TTS speed (auto-speak after each prompt) */
+const SPEECH_RATE_DEFAULT = 0.9;
+/** Slower playback when the user taps the speaker button */
+const SPEECH_RATE_SPEAKER_BUTTON = 0.4;
+
 const dom = {
   fileInput: document.getElementById("csv-input"),
   fileName: document.getElementById("file-name"),
@@ -115,11 +120,11 @@ function updateWordCount() {
   dom.startGame.disabled = count === 0;
 }
 
-function speakWord(word) {
-  speakText(word);
+function speakWord(word, rate = SPEECH_RATE_DEFAULT) {
+  speakText(word, rate);
 }
 
-function speakText(text) {
+function speakText(text, rate = SPEECH_RATE_DEFAULT) {
   if (!("speechSynthesis" in window)) {
     alert("Text-to-speech is not supported in this browser.");
     return;
@@ -127,7 +132,7 @@ function speakText(text) {
   const trimmed = String(text || "").trim();
   if (!trimmed) return;
   const utterance = new SpeechSynthesisUtterance(trimmed);
-  utterance.rate = 0.9;
+  utterance.rate = rate;
   utterance.pitch = 1.0;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
@@ -263,7 +268,7 @@ function renderPrompt() {
       speakBtn.disabled = !state.definitionForSpeech;
       speakBtn.addEventListener("click", () => {
         if (state.mode !== "definition" || !state.definitionForSpeech) return;
-        speakText(state.definitionForSpeech);
+        speakText(state.definitionForSpeech, SPEECH_RATE_SPEAKER_BUTTON);
       });
     }
   } else {
@@ -312,7 +317,7 @@ function renderPrompt() {
       speakWordBtn.addEventListener("click", () => {
         if (state.mode !== "audio") return;
         const w = word;
-        if (w) speakWord(w);
+        if (w) speakWord(w, SPEECH_RATE_SPEAKER_BUTTON);
       });
     }
   }
