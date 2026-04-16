@@ -48,6 +48,9 @@ const state = {
   audioHintDefinition: "",
 };
 
+const SUBMIT_BUTTON_LABEL = "Submit";
+const SUBMIT_BUTTON_NEXT_LABEL = ">>";
+
 const dom = {
   fileInput: document.getElementById("csv-input"),
   fileName: document.getElementById("file-name"),
@@ -66,6 +69,18 @@ const dom = {
   feedback: document.getElementById("feedback"),
   scoreText: document.getElementById("score-text"),
 };
+
+function updateSubmitButtonAppearance() {
+  const btn = dom.submitAnswer;
+  if (!btn) return;
+  if (state.answerLocked) {
+    btn.textContent = SUBMIT_BUTTON_NEXT_LABEL;
+    btn.setAttribute("aria-label", "Next word");
+  } else {
+    btn.textContent = SUBMIT_BUTTON_LABEL;
+    btn.setAttribute("aria-label", "Submit spelling");
+  }
+}
 
 function resetShowHintButton() {
   state.audioHintDefinition = "";
@@ -195,6 +210,8 @@ function renderPrompt() {
     dom.promptArea.innerHTML = "<p>No more words. Great job!</p>";
     dom.answerInput.disabled = true;
     dom.submitAnswer.disabled = true;
+    dom.submitAnswer.textContent = SUBMIT_BUTTON_LABEL;
+    dom.submitAnswer.setAttribute("aria-label", "Submit spelling");
     dom.nextWord.disabled = true;
     resetShowHintButton();
     return;
@@ -304,6 +321,7 @@ function renderPrompt() {
   dom.answerInput.disabled = false;
   dom.submitAnswer.disabled = false;
   dom.nextWord.disabled = !state.hasSubmittedThisWord;
+  updateSubmitButtonAppearance();
   dom.feedback.textContent = "";
   dom.feedback.className = "feedback-text";
   dom.answerInput.focus();
@@ -334,14 +352,16 @@ function handleSubmitAnswer() {
 
   if (isCorrect) {
     state.answerLocked = true;
-    dom.submitAnswer.disabled = true;
     dom.answerInput.disabled = true;
+    dom.submitAnswer.disabled = false;
+    updateSubmitButtonAppearance();
     dom.feedback.textContent = `Correct! ${correctWord}`;
     dom.feedback.className = "feedback-text feedback-correct";
     playCorrectDing();
   } else {
     dom.submitAnswer.disabled = false;
     dom.answerInput.disabled = false;
+    updateSubmitButtonAppearance();
     dom.feedback.textContent = `Not quite. You typed "${userAnswer}", the correct spelling is "${correctWord}". Try again, or use Next to skip.`;
     dom.feedback.className = "feedback-text feedback-incorrect";
     dom.answerInput.focus();
@@ -367,6 +387,8 @@ function goToNextWord() {
       '<div class="prompt-content">You have reached the end of your list. 🎉</div>';
     dom.answerInput.disabled = true;
     dom.submitAnswer.disabled = true;
+    dom.submitAnswer.textContent = SUBMIT_BUTTON_LABEL;
+    dom.submitAnswer.setAttribute("aria-label", "Submit spelling");
     dom.nextWord.disabled = true;
     resetShowHintButton();
     if (state.autoSpeakTimeoutId !== null) {
@@ -446,7 +468,11 @@ dom.startGame.addEventListener("click", () => {
 });
 
 dom.submitAnswer.addEventListener("click", () => {
-  handleSubmitAnswer();
+  if (state.answerLocked) {
+    goToNextWord();
+  } else {
+    handleSubmitAnswer();
+  }
 });
 
 dom.answerInput.addEventListener("keydown", (e) => {

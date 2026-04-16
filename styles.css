@@ -405,6 +405,13 @@ body {
   margin-top: 14px;
 }
 
+/* Match width in both "Submit" and ">>" states */
+#submit-answer {
+  min-width: 6.75rem;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
 #answer-input {
   flex: 1;
   border-radius: 999px;
