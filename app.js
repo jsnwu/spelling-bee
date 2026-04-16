@@ -118,6 +118,48 @@ function speakText(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+/** Reused so repeated correct answers do not create many AudioContexts */
+let correctDingAudioContext = null;
+
+/** Short soft sine “ding” on correct spell (Web Audio API, no asset file) */
+function playCorrectDing() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+
+    if (!correctDingAudioContext || correctDingAudioContext.state === "closed") {
+      correctDingAudioContext = new AC();
+    }
+    const ctx = correctDingAudioContext;
+    if (ctx.state === "suspended" && ctx.resume) {
+      void ctx.resume();
+    }
+
+    const now = ctx.currentTime;
+    const dur = 0.34;
+
+    const ring = (freq, peak, delay) => {
+      const t0 = now + delay;
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t0);
+      const g = ctx.createGain();
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(peak, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.02);
+    };
+
+    ring(830, 0.055, 0);
+    ring(1245, 0.022, 0.04);
+  } catch (_) {
+    /* no-op if audio blocked or unsupported */
+  }
+}
+
 function currentWord() {
   return state.words[state.currentIndex] || null;
 }
@@ -293,6 +335,7 @@ function handleSubmitAnswer() {
     state.awaitingNextAfterCorrect = true;
     dom.feedback.textContent = `Correct! ${correctWord}`;
     dom.feedback.className = "feedback-text feedback-correct";
+    playCorrectDing();
   } else {
     state.awaitingNextAfterCorrect = false;
     dom.feedback.textContent = `Not quite. You typed "${userAnswer}", the correct spelling is "${correctWord}".`;

@@ -27,8 +27,11 @@
         <section class="card config-card">
           <h2>1. Load Your Words</h2>
           <p class="helper-text">
-            Upload a CSV with at least two columns: <strong>word</strong> and <strong>definition</strong>.
-            Optional column: <strong>hint</strong>.
+            Upload a CSV with a <strong>word</strong> column (the spelling answer) and a full-sentence clue:
+            <strong>sentense</strong> or <strong>sentence</strong> (or <strong>meaning</strong>). Add
+            <strong>definition</strong> for the short meaning (used in spoken-word mode). Column
+            <strong>pronounce</strong> is optional. If you do not upload a file, <strong>words/words.csv</strong> is
+            loaded when available.
           </p>
           <div class="file-input-row">
             <label class="file-label">
@@ -40,9 +43,9 @@
           <details class="csv-example">
             <summary>CSV format example</summary>
             <pre>
-word,definition,hint
-serendipity,The occurrence of events by chance in a happy way,Found by accident
-quixotic,Exceedingly idealistic; unrealistic and impractical,Like Don Quixote
+word,sentense,pronounce,definition
+Apple,"I ate a red apple for lunch.",AP-uhl,"A round fruit with firm flesh"
+Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
             </pre>
           </details>
           <p id="load-status" class="status-text"></p>
