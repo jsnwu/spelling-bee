@@ -22,7 +22,7 @@ bash scripts/start.sh
 
 ## Default word list
 
-If **`words/words.csv`** is present, it is loaded automatically on startup. You can still upload a different CSV from the UI.
+If **`words/3rd-grade-words.csv`** is present, it is loaded automatically on startup. You can still upload a different CSV from the UI.
 
 The bundled list uses columns: **`Word`**, **`Sentense`** (example sentence), **`Pronounce`**, **`Definition`** (short meaning used in audio mode).
 
@@ -61,7 +61,7 @@ Each new game shuffles the full list once; you play through every word in order 
 | `index.html` | Page structure |
 | `styles.css` | Layout and theme |
 | `app.js` | CSV load, game flow, speech |
-| `words/words.csv` | Default word list |
+| `words/3rd-grade-words.csv` | Default word list |
 | `assets/bee-icon.png` | Header logo |
 
 ## License

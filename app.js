@@ -1,16 +1,54 @@
-// Simple CSV parser for basic comma-separated values without complex quoting.
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        // Escaped quote ("")
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === ",") {
+      out.push(cur.trim());
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+
+  out.push(cur.trim());
+  return out;
+}
+
+// CSV parser with support for quotes + commas inside quotes.
 function parseCsv(text) {
-  const lines = text
+  const lines = String(text || "")
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
   if (lines.length === 0) return [];
 
-  const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+  const header = parseCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
   const rows = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",").map((c) => c.trim());
+    const cols = parseCsvLine(lines[i]);
     if (cols.length === 1 && !cols[0]) continue;
     const row = {};
     header.forEach((key, idx) => {
@@ -38,6 +76,71 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildAnswerVariants(answer) {
+  const w = String(answer || "").trim();
+  if (!w) return [];
+
+  const lower = w.toLowerCase();
+  const variants = new Set([w, lower]);
+
+  // Plurals
+  variants.add(`${lower}s`);
+  variants.add(`${lower}es`);
+
+  // y -> ies (blueberry -> blueberries)
+  if (lower.endsWith("y") && lower.length > 1) {
+    variants.add(`${lower.slice(0, -1)}ies`);
+  }
+
+  // -ing / -ed
+  variants.add(`${lower}ing`);
+  variants.add(`${lower}ed`);
+
+  // drop trailing e (bake -> baking/baked)
+  if (lower.endsWith("e") && lower.length > 2) {
+    variants.add(`${lower.slice(0, -1)}ing`);
+    variants.add(`${lower.slice(0, -1)}ed`);
+  }
+
+  // consonant + y -> ied (carry -> carried)
+  if (lower.endsWith("y") && lower.length > 2) {
+    variants.add(`${lower.slice(0, -1)}ied`);
+  }
+
+  return Array.from(variants)
+    .map((v) => v.trim())
+    .filter(Boolean)
+    // Prefer longer matches so "carried" masks before "carry"
+    .sort((a, b) => b.length - a.length);
+}
+
+function maskAnswerWord(sentence, answer) {
+  const text = String(sentence || "");
+  const word = String(answer || "").trim();
+  if (!text || !word) return text;
+
+  const variants = buildAnswerVariants(word);
+  if (variants.length === 0) return text;
+  const escaped = variants.map(escapeRegExp).join("|");
+
+  // Prefer whole-word-ish matches so we don't blank parts of other words.
+  // Use Unicode letter boundaries when supported.
+  try {
+    const re = new RegExp(`(^|[^\\p{L}])(${escaped})(?=[^\\p{L}]|$)`, "giu");
+    const masked = text.replace(re, "$1_____");
+    if (masked !== text) return masked;
+  } catch (_) {
+    // Older browsers without Unicode property escapes.
+  }
+
+  // Fallback: simple case-insensitive replace.
+  return text.replace(new RegExp(`(${escaped})`, "gi"), "_____");
+}
+
 const state = {
   words: [],
   currentIndex: 0,
@@ -63,7 +166,7 @@ const SUBMIT_BUTTON_NEXT_LABEL = ">>";
 /** Default TTS speed (auto-speak after each prompt) */
 const SPEECH_RATE_DEFAULT = 0.9;
 /** Slower playback when the user taps the speaker button */
-const SPEECH_RATE_SPEAKER_BUTTON = 0.4;
+const SPEECH_RATE_SPEAKER_BUTTON = 0.5;
 
 const dom = {
   fileInput: document.getElementById("csv-input"),
@@ -77,12 +180,21 @@ const dom = {
   promptArea: document.getElementById("prompt-area"),
   answerInput: document.getElementById("answer-input"),
   submitAnswer: document.getElementById("submit-answer"),
+  gradeSelect: document.getElementById("grade-select"),
+  selectedGradeHint: document.getElementById("selected-grade-hint"),
+  configDetails: document.querySelector(".config-details"),
+  downloadCsv: document.getElementById("download-csv"),
   showHint: document.getElementById("show-hint"),
   showAnswer: document.getElementById("show-answer"),
   nextWord: document.getElementById("next-word"),
   feedback: document.getElementById("feedback"),
   scoreText: document.getElementById("score-text"),
 };
+
+function updateSelectedGradeHint(text) {
+  if (!dom.selectedGradeHint) return;
+  dom.selectedGradeHint.textContent = text;
+}
 
 function updateSubmitButtonAppearance() {
   const btn = dom.submitAnswer;
@@ -113,9 +225,10 @@ if (dom.showHint && !dom.showHint.dataset.bound) {
     if (dom.showHint.disabled) return;
     const def = (state.audioHintDefinition || "").trim();
     if (!def) return;
+    const answer = state.lastPromptWord || "";
     const lead = document.getElementById("audio-prompt-lead");
     if (!lead) return;
-    lead.textContent = def;
+    lead.textContent = maskAnswerWord(def, answer);
     lead.classList.remove("audio-prompt-placeholder");
     lead.classList.add("hint-text");
     dom.showHint.disabled = true;
@@ -127,6 +240,91 @@ function updateWordCount() {
   const count = state.words.length;
   dom.wordCount.textContent = `${count} word${count === 1 ? "" : "s"} loaded`;
   dom.startGame.disabled = count === 0;
+}
+
+function toCsvValue(v) {
+  const s = String(v ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadCsv(filename, csvText) {
+  const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportCurrentWordsCsv() {
+  const rows = state.words && state.words.length ? state.words : null;
+  const header = ["word", "sentense", "pronounce", "definition"];
+  const lines = [header.join(",")];
+
+  if (!rows) {
+    lines.push(
+      [
+        "Apple",
+        'I ate a red apple for lunch.',
+        "AP-uhl",
+        "A round fruit with firm flesh",
+      ].map(toCsvValue).join(",")
+    );
+    lines.push(
+      [
+        "Yacht",
+        "The yacht sailed across the ocean.",
+        "YAHT",
+        "A large pleasure boat",
+      ].map(toCsvValue).join(",")
+    );
+    downloadCsv("words-template.csv", lines.join("\n"));
+    return;
+  }
+
+  for (const row of rows) {
+    const word = (row.word || row.term || "").trim();
+    const sentense = (row.sentense || row.sentence || row.meaning || "").trim();
+    const pronounce = (row.pronounce || "").trim();
+    const definition = (row.definition || "").trim();
+    lines.push([word, sentense, pronounce, definition].map(toCsvValue).join(","));
+  }
+
+  downloadCsv("words-export.csv", lines.join("\n"));
+}
+
+function gradeValueToCsvPath(value) {
+  const v = String(value || "").trim();
+  if (!v) return null;
+  return `words/${v}-grade-words.csv`;
+}
+
+function loadWordsFromCsvText(csvText, sourceLabel) {
+  const rows = parseCsv(csvText);
+  const filtered = rows.filter((row) => (row.word || row.term || "").trim().length > 0);
+  if (filtered.length === 0) {
+    dom.loadStatus.textContent = "No rows with a 'word' column were found.";
+    state.words = [];
+    updateWordCount();
+    return false;
+  }
+
+  shuffleInPlace(filtered);
+  state.words = filtered;
+  if (sourceLabel) dom.fileName.textContent = sourceLabel;
+  dom.loadStatus.textContent = `Loaded ${filtered.length} words.`;
+  updateWordCount();
+  return true;
+}
+
+function gradeValueToLabel(value) {
+  const v = String(value || "").trim();
+  if (!v) return "";
+  return v.replace(/(^\d+)/, "$1").replace(/st|nd|rd|th/i, (m) => m.toLowerCase());
 }
 
 function speakWord(word, rate = SPEECH_RATE_DEFAULT) {
@@ -242,7 +440,7 @@ function renderPrompt() {
 
   if (state.mode === "definition") {
     resetShowHintButton();
-    dom.gameModeLabel.textContent = "Mode: Definition ➜ Spell the word";
+    dom.gameModeLabel.textContent = "Mode: Word in Sentence ➜ Spell the word";
 
     // Remove surrounding quotes for both on-screen and spoken text
     let baseDefinition = definition.replace(/^"(.*)"$/, "$1");
@@ -251,17 +449,12 @@ function renderPrompt() {
     state.definitionForSpeech = baseDefinition || "";
 
     // Mask the word only in the on-screen version
-    let displayDefinition = baseDefinition;
-    if (word && displayDefinition) {
-      const escapedWord = word.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
-      const wordRegex = new RegExp(escapedWord, "gi");
-      displayDefinition = displayDefinition.replace(wordRegex, "_____");
-    }
+    const displayDefinition = maskAnswerWord(baseDefinition, word);
 
     dom.promptArea.innerHTML = `
       <div class="prompt-label">Sentence</div>
       <div class="prompt-main-row">
-        <div class="prompt-content">${displayDefinition || "No definition provided."}</div>
+        <div class="prompt-content">${escapeHtml(displayDefinition || "No definition provided.")}</div>
         <button
           id="speak-definition"
           class="ghost-button icon-button"
@@ -432,18 +625,9 @@ dom.fileInput.addEventListener("change", (e) => {
   reader.onload = (event) => {
     try {
       const text = String(event.target?.result || "");
-      const rows = parseCsv(text);
-      const filtered = rows.filter((row) => (row.word || row.term || "").trim().length > 0);
-
-      if (filtered.length === 0) {
-        dom.loadStatus.textContent = "No rows with a 'word' column were found.";
-        state.words = [];
-      } else {
-        shuffleInPlace(filtered);
-        state.words = filtered;
-        dom.loadStatus.textContent = `Loaded ${filtered.length} words successfully.`;
-      }
-      updateWordCount();
+      loadWordsFromCsvText(text, file.name);
+      dom.loadStatus.textContent = `Loaded ${state.words.length} words successfully.`;
+      updateSelectedGradeHint(`Custom: ${file.name}`);
     } catch (err) {
       console.error(err);
       dom.loadStatus.textContent = "Failed to parse CSV. Please check the format.";
@@ -459,6 +643,44 @@ dom.fileInput.addEventListener("change", (e) => {
 
   reader.readAsText(file);
 });
+
+function loadSelectedGrade() {
+  if (!dom.gradeSelect || !window.fetch) return;
+  const path = gradeValueToCsvPath(dom.gradeSelect.value);
+  if (!path) return;
+  dom.loadStatus.textContent = "Loading grade list…";
+  fetch(path)
+    .then((res) => {
+      if (!res.ok) throw new Error("Grade CSV not found");
+      return res.text();
+    })
+    .then((text) => {
+      const ok = loadWordsFromCsvText(text, `${path} (built-in)`);
+      if (ok) {
+        dom.loadStatus.textContent = `Loaded ${state.words.length} words from ${path}.`;
+        const selectedLabel =
+          dom.gradeSelect.options[dom.gradeSelect.selectedIndex]?.textContent || dom.gradeSelect.value;
+        updateSelectedGradeHint(`Built-in: ${selectedLabel}`);
+      }
+    })
+    .catch(() => {
+      dom.loadStatus.textContent = `Could not load ${path}.`;
+    });
+}
+
+if (dom.gradeSelect && !dom.gradeSelect.dataset.bound) {
+  dom.gradeSelect.dataset.bound = "1";
+  dom.gradeSelect.addEventListener("change", () => {
+    loadSelectedGrade();
+  });
+}
+
+if (dom.downloadCsv && !dom.downloadCsv.dataset.bound) {
+  dom.downloadCsv.dataset.bound = "1";
+  dom.downloadCsv.addEventListener("click", () => {
+    exportCurrentWordsCsv();
+  });
+}
 
 dom.modeButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -481,6 +703,7 @@ dom.startGame.addEventListener("click", () => {
   renderPrompt();
    // Auto-speak after 1 second for the first word
   scheduleAutoSpeak(1000);
+  if (dom.configDetails) dom.configDetails.open = false;
 });
 
 dom.submitAnswer.addEventListener("click", () => {
@@ -536,11 +759,11 @@ dom.nextWord.addEventListener("click", () => {
   goToNextWord();
 });
 
-// Load default CSV from words/words.csv if available
+// Load default CSV from words/3rd-grade-words.csv if available
 (function loadDefaultCsv() {
   if (!window.fetch) return;
 
-  fetch("words/words.csv")
+  fetch("words/3rd-grade-words.csv")
     .then((res) => {
       if (!res.ok) throw new Error("Default CSV not found");
       return res.text();
@@ -552,8 +775,10 @@ dom.nextWord.addEventListener("click", () => {
 
       shuffleInPlace(filtered);
       state.words = filtered;
-      dom.fileName.textContent = "words/words.csv (default)";
+      dom.fileName.textContent = "words/3rd-grade-words.csv (default)";
       dom.loadStatus.textContent = `Loaded ${filtered.length} words from default list.`;
+      if (dom.gradeSelect) dom.gradeSelect.value = "3rd";
+      updateSelectedGradeHint("Built-in: 3rd grade (default)");
       updateWordCount();
     })
     .catch(() => {

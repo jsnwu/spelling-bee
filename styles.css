@@ -17,18 +17,66 @@ body {
 body {
   display: flex;
   justify-content: center;
-  align-items: stretch;
+  /* Let the shell grow with content (no background cutoff) */
+  align-items: flex-start;
 }
 
 .app-shell {
-  max-width: 960px;
+  --content-max: 960px;
+  /* ~1 inch honeycomb frame (varies by display DPI) */
+  --honey-band: 96px;
+  --shell-gutter: 16px;
+  --shell-bottom-gap: 48px;
+  max-width: calc(var(--content-max) + (2 * var(--honey-band)));
   width: 100%;
   min-height: 100vh;
-  padding: 24px 16px 32px;
+  /* Keep content (cards) inside the covered center area */
+  padding: 24px calc(var(--honey-band) + var(--shell-gutter))
+    calc(var(--shell-bottom-gap) + var(--honey-band));
   display: flex;
   flex-direction: column;
   gap: 24px;
   margin: 0 auto;
+  position: relative;
+  isolation: isolate;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 22px;
+  /* Add a warm orange tint to the comb */
+  background-image: linear-gradient(
+      135deg,
+      rgba(249, 115, 22, 0.42),
+      rgba(245, 158, 11, 0.22)
+    ),
+    url("assets/honeycomb-frame.jpg");
+  background-repeat: repeat;
+  /* Bigger cells */
+  background-size: 420px auto;
+  opacity: 0.62;
+  filter: saturate(1.25) contrast(1.22);
+}
+
+/* Cover the center so only left/right/bottom bands show */
+.app-shell::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: var(--honey-band);
+  right: var(--honey-band);
+  bottom: var(--honey-band);
+  border-radius: 18px;
+  background: radial-gradient(circle at top left, #111827, #020617);
+}
+
+.app-shell > * {
+  position: relative;
+  z-index: 2;
 }
 
 .app-header {
@@ -162,6 +210,53 @@ body {
   gap: 12px;
   margin-top: 12px;
   flex-wrap: wrap;
+}
+
+#download-csv {
+  white-space: nowrap;
+}
+
+.load-words-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.load-words-panel {
+  border-radius: 14px;
+  border: 1px solid rgba(55, 65, 81, 0.8);
+  background: rgba(15, 23, 42, 0.7);
+  padding: 12px 12px 14px;
+}
+
+.panel-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.grade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.grade-select {
+  appearance: none;
+  border-radius: 999px;
+  padding: 9px 14px;
+  border: 1px solid rgba(75, 85, 99, 0.9);
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  min-width: 10.5rem;
+}
+
+.subtle-status {
+  margin-top: 10px;
 }
 
 .file-label {
@@ -503,7 +598,17 @@ body {
 
 @media (max-width: 640px) {
   .app-shell {
-    padding: 16px 12px 24px;
+    --honey-band: 72px;
+    --shell-gutter: 12px;
+    --shell-bottom-gap: 32px;
+    padding: 16px calc(var(--honey-band) + var(--shell-gutter))
+      calc(var(--shell-bottom-gap) + var(--honey-band));
+  }
+
+  .app-shell::after {
+    left: var(--honey-band);
+    right: var(--honey-band);
+    bottom: var(--honey-band);
   }
 
   .app-header h1 {

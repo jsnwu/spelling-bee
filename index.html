@@ -6,7 +6,7 @@
     <title>Spelling Bee Game</title>
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png" />
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="assets/bee-touch-icon.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -23,7 +23,7 @@
             />
           </span>
         </h1>
-        <p class="subtitle">Upload your word list and start a custom spelling bee.</p>
+        <p class="subtitle">Spelling bee for 1st to 5th graders — pick your grade or upload a custom word list.</p>
       </header>
 
       <main class="app-main">
@@ -32,33 +32,56 @@
             <summary class="config-details-summary">
               <div class="config-details-summary-text">
                 <h2 class="config-details-heading">1. Load Your Words</h2>
-                <span class="config-details-summary-hint">Optional — default list loads automatically</span>
+                <span id="selected-grade-hint" class="config-details-summary-hint">Built-in: 3rd grade</span>
               </div>
               <span class="config-details-chevron" aria-hidden="true"></span>
             </summary>
             <div class="config-details-body">
-              <p class="helper-text">
-                Upload a CSV with a <strong>word</strong> column (the spelling answer) and a full-sentence clue:
-                <strong>sentense</strong> or <strong>sentence</strong> (or <strong>meaning</strong>). Add
-                <strong>definition</strong> for the short meaning (used in spoken-word mode). Column
-                <strong>pronounce</strong> is optional. If you do not upload a file, <strong>words/words.csv</strong> is
-                loaded when available.
-              </p>
-              <div class="file-input-row">
-                <label class="file-label">
-                  <input type="file" id="csv-input" accept=".csv" />
-                  <span>Select CSV file</span>
-                </label>
-                <span id="file-name" class="file-name">No file selected</span>
-              </div>
-              <details class="csv-example">
-                <summary>CSV format example</summary>
-                <pre>
+              <div class="load-words-grid">
+                <section class="load-words-panel" aria-label="Load by grade">
+                  <h3 class="panel-title">Pick a grade</h3>
+                  <p class="helper-text">
+                    Choose a built-in list and load it instantly.
+                  </p>
+                  <div class="grade-row">
+                    <label class="visually-hidden" for="grade-select">Grade</label>
+                    <select id="grade-select" class="grade-select" aria-label="Select grade">
+                      <option value="1st">1st grade</option>
+                      <option value="2nd">2nd grade</option>
+                      <option value="3rd" selected>3rd grade</option>
+                      <option value="4th">4th grade</option>
+                      <option value="5th">5th grade</option>
+                    </select>
+                  </div>
+                  <p class="status-text subtle-status">
+                    Default loads automatically on startup.
+                  </p>
+                </section>
+
+                <section class="load-words-panel" aria-label="Upload your own CSV">
+                  <h3 class="panel-title">Upload your own CSV</h3>
+                  <p class="helper-text">
+                    Columns: <strong>word</strong> + a clue (<strong>sentense</strong>/<strong>sentence</strong> or
+                    <strong>meaning</strong>). Optional: <strong>definition</strong>, <strong>pronounce</strong>.
+                  </p>
+                  <div class="file-input-row">
+                    <label class="file-label">
+                      <input type="file" id="csv-input" accept=".csv" />
+                      <span>Select CSV file</span>
+                    </label>
+                    <span id="file-name" class="file-name">No file selected</span>
+                    <button id="download-csv" class="ghost-button" type="button">Download CSV</button>
+                  </div>
+                  <details class="csv-example">
+                    <summary>CSV format example</summary>
+                    <pre>
 word,sentense,pronounce,definition
 Apple,"I ate a red apple for lunch.",AP-uhl,"A round fruit with firm flesh"
 Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
-                </pre>
-              </details>
+                    </pre>
+                  </details>
+                </section>
+              </div>
               <p id="load-status" class="status-text"></p>
             </div>
           </details>
@@ -68,17 +91,14 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
           <h2>2. Choose Game Mode</h2>
           <div class="mode-grid">
             <button class="mode-button selected" data-mode="definition">
-              <span class="mode-title">Definition ➜ Spell</span>
-              <span class="mode-desc">See the meaning, then type the word.</span>
+              <span class="mode-title">Word in Sentence ➜ Spell</span>
+              <span class="mode-desc">Read the sentence (with blanks), then type the word.</span>
             </button>
             <button class="mode-button" data-mode="audio">
               <span class="mode-title">Spoken Word ➜ Spell</span>
               <span class="mode-desc">Hear the word spoken out loud, then spell it.</span>
             </button>
           </div>
-          <p class="helper-text">
-            Audio mode uses your browser's text‑to‑speech engine (no uploads required).
-          </p>
         </section>
 
         <section class="card config-card">
