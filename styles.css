@@ -537,6 +537,9 @@ body {
 .feedback-text {
   margin-top: 10px;
   font-size: 0.9rem;
+  line-height: 1.35;
+  /* Reserve space so the game card doesn't jump when feedback appears/disappears */
+  min-height: 2.2em;
 }
 
 .feedback-correct {
