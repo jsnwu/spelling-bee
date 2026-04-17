@@ -115,8 +115,11 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
               <h2>Spelling Round</h2>
               <p id="game-mode-label" class="helper-text"></p>
             </div>
-            <div class="score-pill">
-              <span id="score-text">Score: 0 / 0</span>
+            <div class="game-header-metrics">
+              <button id="stop-game" class="ghost-button" type="button" disabled>Stop</button>
+              <div class="score-pill">
+                <span id="score-text">Score: 0 / 0</span>
+              </div>
             </div>
           </header>
 
@@ -149,6 +152,14 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
       <footer class="app-footer">
         <span>Spelling Bee Studio</span>
       </footer>
+
+      <dialog id="session-summary-dialog" class="session-summary-dialog" aria-labelledby="session-summary-title">
+        <form method="dialog" class="session-summary-form">
+          <h3 id="session-summary-title" class="session-summary-title">Session summary</h3>
+          <div id="session-summary-body" class="session-summary-body"></div>
+          <button type="submit" class="primary-button session-summary-close">Close</button>
+        </form>
+      </dialog>
     </div>
 
     <script src="app.js"></script>

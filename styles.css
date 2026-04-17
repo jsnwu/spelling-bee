@@ -425,6 +425,15 @@ body {
   align-items: center;
   gap: 16px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.game-header-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .score-pill {
@@ -534,6 +543,101 @@ body {
   align-items: center;
   gap: 8px;
   margin-top: 10px;
+}
+
+.session-summary-dialog {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 16px;
+  padding: 32px 36px 36px;
+  max-width: min(28rem, calc(100vw - 40px));
+  width: min(28rem, calc(100vw - 40px));
+  box-sizing: border-box;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+.session-summary-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.72);
+  cursor: pointer;
+}
+
+.session-summary-form {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.session-summary-title {
+  margin: 0 0 4px;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.session-summary-body {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  /* One label column (width = longest label) + aligned values + ~4–6ch gap */
+  display: grid;
+  grid-template-columns: max-content max-content;
+  column-gap: 5ch;
+  row-gap: 14px;
+  align-items: baseline;
+}
+
+.session-summary-line {
+  display: contents;
+  margin: 0;
+}
+
+.session-summary-label {
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+.session-summary-value {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  color: #f1f5f9;
+  min-width: 0;
+}
+
+.session-summary-unit {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 0.88em;
+}
+
+.session-summary-body > .session-misspell-list {
+  grid-column: 1 / -1;
+}
+
+.session-misspell-list {
+  margin: 0;
+  padding: 10px 12px 10px 1.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #d1d5db;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(55, 65, 81, 0.75);
+}
+
+.session-misspell-word {
+  font-weight: 600;
+  color: #fde68a;
+}
+
+.session-misspell-typed {
+  color: #fca5a5;
+}
+
+.session-summary-close {
+  align-self: flex-end;
+  margin-top: 6px;
+  padding-inline: 1.35rem;
+  padding-block: 0.55rem;
 }
 
 .feedback-text {

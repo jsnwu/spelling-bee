@@ -160,6 +160,9 @@ const state = {
   audioHintDefinition: "",
   /** Auto TTS (and speak-after-next-word) only after "Start Spelling Bee" */
   roundStarted: false,
+  gameSessionStartMs: null,
+  /** Wrong graded submits: { word, typed } */
+  misspellings: [],
 };
 
 const SUBMIT_BUTTON_LABEL = "Submit";
@@ -191,6 +194,9 @@ const dom = {
   nextWord: document.getElementById("next-word"),
   feedback: document.getElementById("feedback"),
   scoreText: document.getElementById("score-text"),
+  stopGame: document.getElementById("stop-game"),
+  sessionSummaryDialog: document.getElementById("session-summary-dialog"),
+  sessionSummaryBody: document.getElementById("session-summary-body"),
 };
 
 function updateSelectedGradeHint(text) {
@@ -244,9 +250,67 @@ function updateWordCount() {
   dom.startGame.disabled = count === 0;
 }
 
-function hideGameSection() {
-  if (dom.gameSection) dom.gameSection.classList.add("hidden");
-  state.roundStarted = false;
+function formatDurationSeconds(totalSec) {
+  const s = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  }
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function syncGameChrome() {
+  if (dom.stopGame) dom.stopGame.disabled = !state.roundStarted;
+}
+
+function clearSessionTracking() {
+  state.gameSessionStartMs = null;
+  state.misspellings = [];
+}
+
+function fillSessionSummaryBody(elapsedMs) {
+  if (!dom.sessionSummaryBody) return;
+  const attempts = state.attempts;
+  const correct = state.score;
+  const pct = attempts > 0 ? Math.round((correct / attempts) * 100) : null;
+  const elapsedSec = elapsedMs / 1000;
+  const timeLine = `<p class="session-summary-line"><span class="session-summary-label">Time</span><span class="session-summary-value">${escapeHtml(
+    formatDurationSeconds(elapsedSec)
+  )}</span></p>`;
+  const ratioLine = `<p class="session-summary-line"><span class="session-summary-label">Correct</span><span class="session-summary-value">${correct} / ${attempts} <span class="session-summary-unit">answered</span></span></p>`;
+  const pctLine =
+    pct === null
+      ? `<p class="session-summary-line"><span class="session-summary-label">Accuracy</span><span class="session-summary-value">—</span></p>`
+      : `<p class="session-summary-line"><span class="session-summary-label">Accuracy</span><span class="session-summary-value">${pct}%</span></p>`;
+  let missBlock;
+  if (state.misspellings.length === 0) {
+    missBlock = `<p class="session-summary-line"><span class="session-summary-label">Misspellings</span><span class="session-summary-value">None</span></p>`;
+  } else {
+    const items = state.misspellings
+      .map(
+        (row) =>
+          `<li><span class="session-misspell-word">${escapeHtml(row.word)}</span> — you typed <span class="session-misspell-typed">${escapeHtml(
+            row.typed
+          )}</span></li>`
+      )
+      .join("");
+    missBlock = `<p class="session-summary-line"><span class="session-summary-label">Misspellings</span><span class="session-summary-value">${state.misspellings.length}</span></p><ul class="session-misspell-list">${items}</ul>`;
+  }
+  dom.sessionSummaryBody.innerHTML = `${timeLine}${ratioLine}${pctLine}${missBlock}`;
+}
+
+function openSessionSummaryDialog(elapsedMs) {
+  fillSessionSummaryBody(elapsedMs);
+  if (dom.sessionSummaryDialog && typeof dom.sessionSummaryDialog.showModal === "function") {
+    dom.sessionSummaryDialog.showModal();
+  }
+}
+
+function handleStopGame() {
+  if (!state.roundStarted) return;
+  const elapsedMs = state.gameSessionStartMs ? Date.now() - state.gameSessionStartMs : 0;
   if (state.autoSpeakTimeoutId !== null) {
     clearTimeout(state.autoSpeakTimeoutId);
     state.autoSpeakTimeoutId = null;
@@ -254,6 +318,25 @@ function hideGameSection() {
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
+  state.roundStarted = false;
+  state.gameSessionStartMs = null;
+  openSessionSummaryDialog(elapsedMs);
+  syncGameChrome();
+  renderPrompt();
+}
+
+function hideGameSection() {
+  if (dom.gameSection) dom.gameSection.classList.add("hidden");
+  state.roundStarted = false;
+  clearSessionTracking();
+  if (state.autoSpeakTimeoutId !== null) {
+    clearTimeout(state.autoSpeakTimeoutId);
+    state.autoSpeakTimeoutId = null;
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  syncGameChrome();
 }
 
 /** First word visible once a list is loaded; no TTS until Start is clicked */
@@ -276,9 +359,11 @@ function showSpellingRoundCard() {
   state.attempts = 0;
   state.hasSubmittedThisWord = false;
   state.answerLocked = false;
+  clearSessionTracking();
   dom.scoreText.textContent = "Score: 0 / 0";
   dom.gameSection.classList.remove("hidden");
   renderPrompt();
+  syncGameChrome();
 }
 
 function toCsvValue(v) {
@@ -469,6 +554,7 @@ function renderPrompt() {
     dom.nextWord.disabled = true;
     resetShowHintButton();
     if (dom.showAnswer) dom.showAnswer.disabled = true;
+    syncGameChrome();
     return;
   }
 
@@ -500,6 +586,7 @@ function renderPrompt() {
     dom.feedback.textContent = "";
     dom.feedback.className = "feedback-text";
     if (dom.showAnswer) dom.showAnswer.disabled = true;
+    syncGameChrome();
     return;
   }
 
@@ -607,6 +694,7 @@ function renderPrompt() {
   dom.feedback.className = "feedback-text";
   if (dom.showAnswer) dom.showAnswer.disabled = false;
   dom.answerInput.focus();
+  syncGameChrome();
 }
 
 function updateScore(correct) {
@@ -642,6 +730,10 @@ function handleSubmitAnswer() {
     dom.feedback.className = "feedback-text feedback-correct";
     playCorrectDing();
   } else {
+    state.misspellings.push({
+      word: correctWord,
+      typed: dom.answerInput.value.trim(),
+    });
     dom.submitAnswer.disabled = false;
     dom.answerInput.disabled = false;
     updateSubmitButtonAppearance();
@@ -669,6 +761,16 @@ function goToNextWord() {
     renderPrompt();
     if (state.roundStarted) scheduleAutoSpeak(1000);
   } else {
+    const elapsedMs = state.gameSessionStartMs ? Date.now() - state.gameSessionStartMs : 0;
+    if (state.autoSpeakTimeoutId !== null) {
+      clearTimeout(state.autoSpeakTimeoutId);
+      state.autoSpeakTimeoutId = null;
+    }
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    state.roundStarted = false;
+    state.gameSessionStartMs = null;
     dom.promptArea.innerHTML =
       '<div class="prompt-content">You have reached the end of your list. 🎉</div>';
     dom.answerInput.disabled = true;
@@ -678,10 +780,8 @@ function goToNextWord() {
     dom.nextWord.disabled = true;
     resetShowHintButton();
     if (dom.showAnswer) dom.showAnswer.disabled = true;
-    if (state.autoSpeakTimeoutId !== null) {
-      clearTimeout(state.autoSpeakTimeoutId);
-      state.autoSpeakTimeoutId = null;
-    }
+    openSessionSummaryDialog(elapsedMs);
+    syncGameChrome();
   }
 }
 
@@ -788,17 +888,40 @@ dom.startGame.addEventListener("click", () => {
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
+  clearSessionTracking();
   shuffleInPlace(state.words);
   state.currentIndex = 0;
   state.score = 0;
   state.attempts = 0;
   state.roundStarted = true;
+  state.gameSessionStartMs = Date.now();
   dom.scoreText.textContent = "Score: 0 / 0";
   dom.gameSection.classList.remove("hidden");
   renderPrompt();
   scheduleAutoSpeak(1000);
+  syncGameChrome();
   if (dom.configDetails) dom.configDetails.open = false;
 });
+
+if (dom.stopGame) {
+  dom.stopGame.addEventListener("click", () => {
+    handleStopGame();
+  });
+}
+
+if (dom.sessionSummaryDialog && !dom.sessionSummaryDialog.dataset.bound) {
+  dom.sessionSummaryDialog.dataset.bound = "1";
+  dom.sessionSummaryDialog.addEventListener("click", (e) => {
+    if (e.target === dom.sessionSummaryDialog) {
+      dom.sessionSummaryDialog.close();
+    }
+  });
+  dom.sessionSummaryDialog.addEventListener("close", () => {
+    if (!state.roundStarted && state.words.length > 0) {
+      renderPrompt();
+    }
+  });
+}
 
 dom.submitAnswer.addEventListener("click", () => {
   if (state.answerLocked) {
