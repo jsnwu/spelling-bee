@@ -158,6 +158,8 @@ const state = {
   answerLocked: false,
   /** Concise definition for audio mode; shown only after "Show hint" */
   audioHintDefinition: "",
+  /** Auto TTS (and speak-after-next-word) only after "Start Spelling Bee" */
+  roundStarted: false,
 };
 
 const SUBMIT_BUTTON_LABEL = "Submit";
@@ -242,6 +244,43 @@ function updateWordCount() {
   dom.startGame.disabled = count === 0;
 }
 
+function hideGameSection() {
+  if (dom.gameSection) dom.gameSection.classList.add("hidden");
+  state.roundStarted = false;
+  if (state.autoSpeakTimeoutId !== null) {
+    clearTimeout(state.autoSpeakTimeoutId);
+    state.autoSpeakTimeoutId = null;
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+/** First word visible once a list is loaded; no TTS until Start is clicked */
+function showSpellingRoundCard() {
+  if (!dom.gameSection) return;
+  if (state.words.length === 0) {
+    hideGameSection();
+    return;
+  }
+  if (state.autoSpeakTimeoutId !== null) {
+    clearTimeout(state.autoSpeakTimeoutId);
+    state.autoSpeakTimeoutId = null;
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  state.roundStarted = false;
+  state.currentIndex = 0;
+  state.score = 0;
+  state.attempts = 0;
+  state.hasSubmittedThisWord = false;
+  state.answerLocked = false;
+  dom.scoreText.textContent = "Score: 0 / 0";
+  dom.gameSection.classList.remove("hidden");
+  renderPrompt();
+}
+
 function toCsvValue(v) {
   const s = String(v ?? "");
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -310,6 +349,7 @@ function loadWordsFromCsvText(csvText, sourceLabel) {
     dom.loadStatus.textContent = "No rows with a 'word' column were found.";
     state.words = [];
     updateWordCount();
+    hideGameSection();
     return false;
   }
 
@@ -318,6 +358,7 @@ function loadWordsFromCsvText(csvText, sourceLabel) {
   if (sourceLabel) dom.fileName.textContent = sourceLabel;
   dom.loadStatus.textContent = `Loaded ${filtered.length} words.`;
   updateWordCount();
+  showSpellingRoundCard();
   return true;
 }
 
@@ -403,6 +444,7 @@ function scheduleAutoSpeak(delayMs = 1000) {
   if (!entry) return;
 
   state.autoSpeakTimeoutId = window.setTimeout(() => {
+    if (!state.roundStarted) return;
     const current = currentWord();
     if (!current) return;
 
@@ -426,6 +468,38 @@ function renderPrompt() {
     dom.submitAnswer.setAttribute("aria-label", "Submit spelling");
     dom.nextWord.disabled = true;
     resetShowHintButton();
+    if (dom.showAnswer) dom.showAnswer.disabled = true;
+    return;
+  }
+
+  if (!state.roundStarted) {
+    state.hasSubmittedThisWord = false;
+    state.answerLocked = false;
+    resetShowHintButton();
+
+    if (state.mode === "definition") {
+      dom.gameModeLabel.textContent = "Mode: Word in Sentence ➜ Spell the word";
+      dom.promptArea.innerHTML = `<p class="helper-text prompt-standby">Click <strong>Start Spelling Bee</strong> in the section above to reveal the sentence and begin your round.</p>`;
+    } else {
+      dom.gameModeLabel.textContent = "Mode: Spoken word ➜ Spell the word";
+      state.audioHintDefinition = "";
+      state.definitionForSpeech = "";
+      state.lastPromptWord = (entry.word || entry.term || "").trim();
+      dom.promptArea.innerHTML = `<p class="helper-text prompt-standby">Click <strong>Start Spelling Bee</strong> in the section above to hear the word and begin your round.</p>`;
+      if (dom.showHint) {
+        dom.showHint.classList.add("hidden");
+        dom.showHint.disabled = true;
+      }
+    }
+
+    dom.answerInput.value = "";
+    dom.answerInput.disabled = true;
+    dom.submitAnswer.disabled = true;
+    dom.nextWord.disabled = true;
+    updateSubmitButtonAppearance();
+    dom.feedback.textContent = "";
+    dom.feedback.className = "feedback-text";
+    if (dom.showAnswer) dom.showAnswer.disabled = true;
     return;
   }
 
@@ -531,6 +605,7 @@ function renderPrompt() {
   updateSubmitButtonAppearance();
   dom.feedback.textContent = "";
   dom.feedback.className = "feedback-text";
+  if (dom.showAnswer) dom.showAnswer.disabled = false;
   dom.answerInput.focus();
 }
 
@@ -543,6 +618,7 @@ function updateScore(correct) {
 function handleSubmitAnswer() {
   const entry = currentWord();
   if (!entry) return;
+  if (!state.roundStarted) return;
   if (state.answerLocked) return;
 
   const userAnswer = dom.answerInput.value.trim().toLowerCase();
@@ -580,6 +656,7 @@ function handleSubmitAnswer() {
 function showCorrectAnswer() {
   const entry = currentWord();
   if (!entry) return;
+  if (!state.roundStarted) return;
   const correctWord = String(entry.word || entry.term || "").trim();
   dom.feedback.innerHTML = `Answer: <span class="feedback-highlight-word">${escapeHtml(correctWord)}</span>`;
   dom.feedback.className = "feedback-text feedback-answer";
@@ -590,7 +667,7 @@ function goToNextWord() {
   if (state.currentIndex < state.words.length - 1) {
     state.currentIndex += 1;
     renderPrompt();
-    scheduleAutoSpeak(1000);
+    if (state.roundStarted) scheduleAutoSpeak(1000);
   } else {
     dom.promptArea.innerHTML =
       '<div class="prompt-content">You have reached the end of your list. 🎉</div>';
@@ -600,6 +677,7 @@ function goToNextWord() {
     dom.submitAnswer.setAttribute("aria-label", "Submit spelling");
     dom.nextWord.disabled = true;
     resetShowHintButton();
+    if (dom.showAnswer) dom.showAnswer.disabled = true;
     if (state.autoSpeakTimeoutId !== null) {
       clearTimeout(state.autoSpeakTimeoutId);
       state.autoSpeakTimeoutId = null;
@@ -615,6 +693,7 @@ dom.fileInput.addEventListener("change", (e) => {
     dom.loadStatus.textContent = "";
     state.words = [];
     updateWordCount();
+    hideGameSection();
     return;
   }
 
@@ -633,12 +712,14 @@ dom.fileInput.addEventListener("change", (e) => {
       dom.loadStatus.textContent = "Failed to parse CSV. Please check the format.";
       state.words = [];
       updateWordCount();
+      hideGameSection();
     }
   };
   reader.onerror = () => {
     dom.loadStatus.textContent = "Error reading file.";
     state.words = [];
     updateWordCount();
+    hideGameSection();
   };
 
   reader.readAsText(file);
@@ -688,20 +769,33 @@ dom.modeButtons.forEach((button) => {
     if (!mode) return;
     state.mode = mode;
     dom.modeButtons.forEach((b) => b.classList.toggle("selected", b === button));
+    if (
+      dom.gameSection &&
+      !dom.gameSection.classList.contains("hidden") &&
+      state.words.length > 0
+    ) {
+      renderPrompt();
+    }
   });
 });
 
 dom.startGame.addEventListener("click", () => {
   if (state.words.length === 0) return;
-  // Shuffle words at the start of every new game so order is fresh
+  if (state.autoSpeakTimeoutId !== null) {
+    clearTimeout(state.autoSpeakTimeoutId);
+    state.autoSpeakTimeoutId = null;
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
   shuffleInPlace(state.words);
   state.currentIndex = 0;
   state.score = 0;
   state.attempts = 0;
+  state.roundStarted = true;
   dom.scoreText.textContent = "Score: 0 / 0";
   dom.gameSection.classList.remove("hidden");
   renderPrompt();
-   // Auto-speak after 1 second for the first word
   scheduleAutoSpeak(1000);
   if (dom.configDetails) dom.configDetails.open = false;
 });
@@ -769,17 +863,11 @@ dom.nextWord.addEventListener("click", () => {
       return res.text();
     })
     .then((text) => {
-      const rows = parseCsv(text);
-      const filtered = rows.filter((row) => (row.word || row.term || "").trim().length > 0);
-      if (filtered.length === 0) return;
-
-      shuffleInPlace(filtered);
-      state.words = filtered;
-      dom.fileName.textContent = "words/3rd-grade-words.csv (default)";
-      dom.loadStatus.textContent = `Loaded ${filtered.length} words from default list.`;
+      const ok = loadWordsFromCsvText(text, "words/3rd-grade-words.csv (default)");
+      if (!ok) return;
+      dom.loadStatus.textContent = `Loaded ${state.words.length} words from default list.`;
       if (dom.gradeSelect) dom.gradeSelect.value = "3rd";
       updateSelectedGradeHint("Built-in: 3rd grade (default)");
-      updateWordCount();
     })
     .catch(() => {
       // Fail silently; user can still upload a CSV manually.

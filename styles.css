@@ -26,13 +26,10 @@ body {
   /* ~1 inch honeycomb frame (varies by display DPI) */
   --honey-band: 60px;
   --shell-gutter: 16px;
-  --shell-bottom-gap: 120px;
   max-width: calc(var(--content-max) + (2 * var(--honey-band)));
   width: 100%;
-  min-height: 100vh;
-  /* Keep content (cards) inside the covered center area */
   padding: 24px calc(var(--honey-band) + var(--shell-gutter))
-    calc(var(--shell-bottom-gap) + var(--honey-band));
+    calc(24px + var(--honey-band));
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -61,7 +58,6 @@ body {
   filter: saturate(1.25) contrast(1.22);
 }
 
-/* Cover the center so only left/right/bottom bands show */
 .app-shell::after {
   content: "";
   position: absolute;
@@ -116,7 +112,6 @@ body {
 }
 
 .app-main {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -419,6 +414,11 @@ body {
   margin-top: 4px;
 }
 
+#game-section {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .game-header {
   display: flex;
   justify-content: space-between;
@@ -442,6 +442,8 @@ body {
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.95);
   border: 1px solid rgba(55, 65, 81, 0.9);
+  /* Match ~sentence + label + speaker row so the shell doesn't jump on Start */
+  min-height: 7rem;
 }
 
 .prompt-label {
@@ -603,9 +605,8 @@ body {
   .app-shell {
     --honey-band: 72px;
     --shell-gutter: 12px;
-    --shell-bottom-gap: 32px;
     padding: 16px calc(var(--honey-band) + var(--shell-gutter))
-      calc(var(--shell-bottom-gap) + var(--honey-band));
+      calc(16px + var(--honey-band));
   }
 
   .app-shell::after {
