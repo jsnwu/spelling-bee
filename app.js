@@ -29,6 +29,15 @@ function shuffleInPlace(arr) {
   }
 }
 
+/** Safe for inserting user/word list text into HTML */
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 const state = {
   words: [],
   currentIndex: 0,
@@ -360,14 +369,16 @@ function handleSubmitAnswer() {
     dom.answerInput.disabled = true;
     dom.submitAnswer.disabled = false;
     updateSubmitButtonAppearance();
-    dom.feedback.textContent = `Correct! ${correctWord}`;
+    dom.feedback.innerHTML = `Correct! <span class="feedback-highlight-word">${escapeHtml(correctWord)}</span>`;
     dom.feedback.className = "feedback-text feedback-correct";
     playCorrectDing();
   } else {
     dom.submitAnswer.disabled = false;
     dom.answerInput.disabled = false;
     updateSubmitButtonAppearance();
-    dom.feedback.textContent = `Not quite. You typed "${userAnswer}", the correct spelling is "${correctWord}". Try again, or use Next to skip.`;
+    dom.feedback.innerHTML = `Not quite. The correct spelling is <span class="feedback-highlight-word">${escapeHtml(
+      correctWord
+    )}</span>. Try again.`;
     dom.feedback.className = "feedback-text feedback-incorrect";
     dom.answerInput.focus();
   }
@@ -377,7 +388,7 @@ function showCorrectAnswer() {
   const entry = currentWord();
   if (!entry) return;
   const correctWord = String(entry.word || entry.term || "").trim();
-  dom.feedback.textContent = `Answer: ${correctWord}`;
+  dom.feedback.innerHTML = `Answer: <span class="feedback-highlight-word">${escapeHtml(correctWord)}</span>`;
   dom.feedback.className = "feedback-text feedback-answer";
 }
 
