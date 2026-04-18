@@ -163,6 +163,12 @@ const state = {
   /** Auto TTS (and speak-after-next-word) only after "Start Spelling Bee" */
   roundStarted: false,
   gameSessionStartMs: null,
+  /** Accumulated ms the session clock was paused due to idle (no game activity) */
+  timerIdlePausedMs: 0,
+  /** Wall-clock ms when idle pause started; null when clock is running */
+  timerPausedSinceMs: null,
+  /** `setTimeout` id for scheduling idle pause */
+  idlePauseTimerId: null,
   /** Wrong graded submits: { word, typed } */
   misspellings: [],
   /** `setInterval` id for live session timer (when enabled) */
@@ -175,6 +181,8 @@ const SUBMIT_BUTTON_LABEL = "Submit";
 const SUBMIT_BUTTON_NEXT_LABEL = ">>";
 /** Delay before auto-advance to the next word after a correct answer (when enabled) */
 const AUTO_ADVANCE_AFTER_CORRECT_MS = 2000;
+/** No pointer/keyboard/input in the game area for this long → pause session timer until activity */
+const IDLE_PAUSE_AFTER_MS = 10_000;
 
 /** Default TTS speed (auto-speak after each prompt) */
 const SPEECH_RATE_DEFAULT = 0.9;
@@ -330,9 +338,59 @@ function stopSessionTimer() {
   if (dom.gameTimer) dom.gameTimer.textContent = "0:00";
 }
 
+/** Active session duration in ms (excludes idle-paused periods) */
+function getElapsedSessionMs() {
+  if (!state.gameSessionStartMs) return 0;
+  let ms = Date.now() - state.gameSessionStartMs - (state.timerIdlePausedMs || 0);
+  if (state.timerPausedSinceMs) {
+    ms -= Date.now() - state.timerPausedSinceMs;
+  }
+  return Math.max(0, ms);
+}
+
+function clearIdleSessionPause() {
+  if (state.idlePauseTimerId !== null) {
+    clearTimeout(state.idlePauseTimerId);
+    state.idlePauseTimerId = null;
+  }
+  state.timerIdlePausedMs = 0;
+  state.timerPausedSinceMs = null;
+}
+
+function pauseTimerForIdle() {
+  if (!state.roundStarted || !state.gameSessionStartMs || state.timerPausedSinceMs) return;
+  state.timerPausedSinceMs = Date.now();
+  updateGameTimerLabel();
+}
+
+function resumeTimerFromIdle() {
+  if (!state.timerPausedSinceMs) return;
+  state.timerIdlePausedMs += Date.now() - state.timerPausedSinceMs;
+  state.timerPausedSinceMs = null;
+  updateGameTimerLabel();
+}
+
+function scheduleIdlePauseCheck() {
+  if (state.idlePauseTimerId !== null) {
+    clearTimeout(state.idlePauseTimerId);
+    state.idlePauseTimerId = null;
+  }
+  if (!state.roundStarted || !state.gameSessionStartMs) return;
+  state.idlePauseTimerId = window.setTimeout(() => {
+    state.idlePauseTimerId = null;
+    pauseTimerForIdle();
+  }, IDLE_PAUSE_AFTER_MS);
+}
+
+function onGameActivity() {
+  if (!state.roundStarted || !state.gameSessionStartMs) return;
+  resumeTimerFromIdle();
+  scheduleIdlePauseCheck();
+}
+
 function updateGameTimerLabel() {
   if (!dom.gameTimer || !state.gameSessionStartMs) return;
-  const sec = (Date.now() - state.gameSessionStartMs) / 1000;
+  const sec = getElapsedSessionMs() / 1000;
   dom.gameTimer.textContent = formatDurationSeconds(sec);
 }
 
@@ -372,6 +430,7 @@ function syncGameChrome() {
 function clearSessionTracking() {
   stopSessionTimer();
   clearAutoNextTimeout();
+  clearIdleSessionPause();
   state.gameSessionStartMs = null;
   state.misspellings = [];
 }
@@ -416,12 +475,13 @@ function openSessionSummaryDialog(elapsedMs) {
 
 function handleStopGame() {
   if (!state.roundStarted) return;
-  const elapsedMs = state.gameSessionStartMs ? Date.now() - state.gameSessionStartMs : 0;
+  const elapsedMs = getElapsedSessionMs();
   if (state.autoSpeakTimeoutId !== null) {
     clearTimeout(state.autoSpeakTimeoutId);
     state.autoSpeakTimeoutId = null;
   }
   clearAutoNextTimeout();
+  clearIdleSessionPause();
   stopSessionTimer();
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
@@ -706,6 +766,17 @@ function initGameOptionsCloseOnOutsideClick() {
   });
 }
 
+/** Resume / reset idle timer on interaction inside the spelling round (not setup UI). */
+function initGameIdleTimer() {
+  const el = dom.gameSection;
+  if (!el || el.dataset.idleBound) return;
+  el.dataset.idleBound = "1";
+  const opts = { passive: true };
+  for (const ev of ["pointerdown", "keydown", "input", "click", "focusin"]) {
+    el.addEventListener(ev, onGameActivity, opts);
+  }
+}
+
 function initTtsVoices() {
   if (!("speechSynthesis" in window) || !dom.ttsVoiceSelect) return;
   const refresh = () => {
@@ -970,6 +1041,7 @@ function handleSubmitAnswer() {
   const entry = currentWord();
   if (!entry) return;
   if (!state.roundStarted) return;
+  onGameActivity();
   if (state.answerLocked) return;
 
   const userAnswer = dom.answerInput.value.trim().toLowerCase();
@@ -1036,11 +1108,12 @@ function goToNextWord() {
     renderPrompt();
     if (state.roundStarted) scheduleAutoSpeak(1000);
   } else {
-    const elapsedMs = state.gameSessionStartMs ? Date.now() - state.gameSessionStartMs : 0;
+    const elapsedMs = getElapsedSessionMs();
     if (state.autoSpeakTimeoutId !== null) {
       clearTimeout(state.autoSpeakTimeoutId);
       state.autoSpeakTimeoutId = null;
     }
+    clearIdleSessionPause();
     stopSessionTimer();
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -1169,6 +1242,7 @@ dom.startGame.addEventListener("click", () => {
   scheduleAutoSpeak(1000);
   syncGameChrome();
   startSessionTimer();
+  onGameActivity();
   if (dom.configDetails) dom.configDetails.open = false;
   if (dom.gameOptionsDetails) dom.gameOptionsDetails.open = false;
 });
@@ -1209,6 +1283,7 @@ dom.answerInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     if (state.answerLocked) {
+      onGameActivity();
       goToNextWord();
     } else {
       handleSubmitAnswer();
@@ -1229,6 +1304,7 @@ window.addEventListener("keydown", (e) => {
     if (t && t.tagName === "INPUT" && t.type === "file") return;
     if (t && typeof t.closest === "function" && t.closest("button")) return;
     e.preventDefault();
+    onGameActivity();
     goToNextWord();
   }
   // Right arrow: go to next word (when game section is visible)
@@ -1237,6 +1313,7 @@ window.addEventListener("keydown", (e) => {
     if (dom.answerInput && document.activeElement === dom.answerInput) return;
     if (!dom.gameSection.classList.contains("hidden") && !dom.nextWord.disabled) {
       e.preventDefault();
+      onGameActivity();
       goToNextWord();
     }
   }
@@ -1262,6 +1339,7 @@ if (dom.ttsVoiceSelect && !dom.ttsVoiceSelect.dataset.bound) {
 }
 initGameOptions();
 initGameOptionsCloseOnOutsideClick();
+initGameIdleTimer();
 initTtsVoices();
 
 // Load default CSV from words/3rd-grade-words.csv if available
