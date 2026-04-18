@@ -129,6 +129,10 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
                     <label class="game-option-label" for="option-auto-next">Auto advance next word</label>
                   </div>
                   <div class="game-option-row game-option-row--checkbox">
+                    <input type="checkbox" id="option-show-bee-progress" class="game-option-checkbox" checked />
+                    <label class="game-option-label" for="option-show-bee-progress">Show bee progress</label>
+                  </div>
+                  <div class="game-option-row game-option-row--checkbox">
                     <input type="checkbox" id="option-show-timer" class="game-option-checkbox" />
                     <label class="game-option-label" for="option-show-timer">Show timer</label>
                   </div>
@@ -140,8 +144,15 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
 
         <section id="game-section" class="card game-card hidden">
           <header class="game-header">
-            <div>
-              <h2>Spelling Round</h2>
+            <div class="game-header-title-col">
+              <div class="game-header-heading-row">
+                <h2 class="game-header-heading">Spelling Round</h2>
+                <div
+                  id="game-header-bees"
+                  class="game-header-bees"
+                  aria-label="Progress bees"
+                ></div>
+              </div>
               <p id="game-mode-label" class="helper-text"></p>
             </div>
             <div class="game-header-metrics">

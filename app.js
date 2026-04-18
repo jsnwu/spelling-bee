@@ -183,6 +183,9 @@ const SUBMIT_BUTTON_NEXT_LABEL = ">>";
 const AUTO_ADVANCE_AFTER_CORRECT_MS = 2000;
 /** No pointer/keyboard/input in the game area for this long → pause session timer until activity */
 const IDLE_PAUSE_AFTER_MS = 10_000;
+/** Bee icons beside “Spelling Round”: 1 to start, +1 each 10 correct (capped) */
+const BEE_PROGRESS_ICON_SRC = "assets/bee-icon.png";
+const BEE_PROGRESS_MAX_ICONS = 12;
 
 /** Default TTS speed (auto-speak after each prompt) */
 const SPEECH_RATE_DEFAULT = 0.9;
@@ -192,6 +195,7 @@ const SPEECH_RATE_SPEAKER_BUTTON = 0.5;
 const TTS_VOICE_STORAGE_KEY = "spellingBeeTTSVoiceURI";
 const AUTO_NEXT_STORAGE_KEY = "spellingBeeAutoNextWord";
 const SHOW_TIMER_STORAGE_KEY = "spellingBeeShowTimer";
+const SHOW_BEE_PROGRESS_STORAGE_KEY = "spellingBeeShowBeeProgress";
 
 /** Prefer English, then names that usually indicate a female voice per OS/browser lists */
 const TTS_FEMALE_NAME_PATTERNS = [
@@ -249,7 +253,9 @@ const dom = {
   sessionSummaryBody: document.getElementById("session-summary-body"),
   ttsVoiceSelect: document.getElementById("tts-voice-select"),
   gameTimer: document.getElementById("game-timer"),
+  gameHeaderBees: document.getElementById("game-header-bees"),
   optionAutoNext: document.getElementById("option-auto-next"),
+  optionShowBeeProgress: document.getElementById("option-show-bee-progress"),
   optionShowTimer: document.getElementById("option-show-timer"),
 };
 
@@ -324,6 +330,11 @@ function formatDurationSeconds(totalSec) {
 
 function isShowTimerEnabled() {
   return dom.optionShowTimer?.checked === true;
+}
+
+function isShowBeeProgressEnabled() {
+  if (!dom.optionShowBeeProgress) return true;
+  return dom.optionShowBeeProgress.checked === true;
 }
 
 function isAutoNextEnabled() {
@@ -410,6 +421,45 @@ function clearAutoNextTimeout() {
   }
 }
 
+function beeProgressCount(score) {
+  return Math.min(BEE_PROGRESS_MAX_ICONS, 1 + Math.floor(score / 10));
+}
+
+function updateProgressBees() {
+  const wrap = dom.gameHeaderBees;
+  if (!wrap || !dom.gameSection) return;
+  const sectionVisible = !dom.gameSection.classList.contains("hidden") && state.words.length > 0;
+  wrap.replaceChildren();
+  if (!isShowBeeProgressEnabled()) {
+    wrap.hidden = true;
+    wrap.setAttribute("aria-hidden", "true");
+    wrap.setAttribute("aria-label", "Bee progress hidden");
+    return;
+  }
+  wrap.hidden = false;
+  if (!sectionVisible) {
+    wrap.setAttribute("aria-hidden", "true");
+    wrap.setAttribute("aria-label", "Progress bees");
+    return;
+  }
+  wrap.removeAttribute("aria-hidden");
+  const n = beeProgressCount(state.score);
+  for (let i = 0; i < n; i++) {
+    const img = document.createElement("img");
+    img.src = BEE_PROGRESS_ICON_SRC;
+    img.alt = "";
+    img.className = "game-header-bee-img";
+    img.decoding = "async";
+    wrap.appendChild(img);
+  }
+  wrap.setAttribute(
+    "aria-label",
+    n <= 1
+      ? "1 bee — another bee for each 10 correct answers"
+      : `${n} bees — one more for each 10 correct answers`
+  );
+}
+
 function syncGameChrome() {
   if (dom.stopGame) dom.stopGame.disabled = !state.roundStarted;
   if (dom.showAnswer) {
@@ -425,6 +475,7 @@ function syncGameChrome() {
       updateGameTimerLabel();
     }
   }
+  updateProgressBees();
 }
 
 function clearSessionTracking() {
@@ -445,6 +496,8 @@ function fillSessionSummaryBody(elapsedMs) {
     formatDurationSeconds(elapsedSec)
   )}</span></p>`;
   const ratioLine = `<p class="session-summary-line"><span class="session-summary-label">Correct</span><span class="session-summary-value">${correct} / ${attempts}</span></p>`;
+  const beesEarned = beeProgressCount(correct);
+  const beeLine = `<p class="session-summary-line"><span class="session-summary-label">Bees earned</span><span class="session-summary-value">${beesEarned}</span></p>`;
   const pctLine =
     pct === null
       ? `<p class="session-summary-line"><span class="session-summary-label">Accuracy</span><span class="session-summary-value">—</span></p>`
@@ -463,7 +516,7 @@ function fillSessionSummaryBody(elapsedMs) {
       .join("");
     missBlock = `<p class="session-summary-line"><span class="session-summary-label">Misspellings</span><span class="session-summary-value">${state.misspellings.length}</span></p><ul class="session-misspell-list">${items}</ul>`;
   }
-  dom.sessionSummaryBody.innerHTML = `${timeLine}${ratioLine}${pctLine}${missBlock}`;
+  dom.sessionSummaryBody.innerHTML = `${timeLine}${ratioLine}${beeLine}${pctLine}${missBlock}`;
 }
 
 function openSessionSummaryDialog(elapsedMs) {
@@ -720,6 +773,14 @@ function initGameOptions() {
       dom.optionAutoNext.checked = true;
     }
   }
+  if (dom.optionShowBeeProgress) {
+    try {
+      const stored = localStorage.getItem(SHOW_BEE_PROGRESS_STORAGE_KEY);
+      dom.optionShowBeeProgress.checked = stored === null ? true : stored === "1";
+    } catch (_) {
+      dom.optionShowBeeProgress.checked = true;
+    }
+  }
   if (dom.optionShowTimer) {
     try {
       dom.optionShowTimer.checked = localStorage.getItem(SHOW_TIMER_STORAGE_KEY) === "1";
@@ -735,6 +796,17 @@ function initGameOptions() {
       } catch (_) {
         /* ignore */
       }
+    });
+  }
+  if (dom.optionShowBeeProgress && !dom.optionShowBeeProgress.dataset.bound) {
+    dom.optionShowBeeProgress.dataset.bound = "1";
+    dom.optionShowBeeProgress.addEventListener("change", () => {
+      try {
+        localStorage.setItem(SHOW_BEE_PROGRESS_STORAGE_KEY, dom.optionShowBeeProgress.checked ? "1" : "0");
+      } catch (_) {
+        /* ignore */
+      }
+      syncGameChrome();
     });
   }
   if (dom.optionShowTimer && !dom.optionShowTimer.dataset.bound) {
@@ -1035,6 +1107,7 @@ function updateScore(correct) {
   if (correct) state.score += 1;
   state.attempts += 1;
   dom.scoreText.textContent = `Score: ${state.score} / ${state.attempts}`;
+  updateProgressBees();
 }
 
 function handleSubmitAnswer() {

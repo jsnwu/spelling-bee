@@ -325,8 +325,10 @@ body {
   min-width: 0;
 }
 
-.start-game-card-primary .start-game-card-title {
+.start-game-card-primary .start-game-card-title,
+.game-header-heading {
   margin: 0;
+  font-size: 1.1rem;
 }
 
 .start-game-card-primary .start-game-main {
@@ -620,10 +622,7 @@ body {
   margin-top: 4px;
 }
 
-#game-section {
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
+/* Inherits `.card` padding (18px 18px 20px) — same top inset as step cards (e.g. “3. Start Game”) */
 
 .game-header {
   display: flex;
@@ -632,6 +631,38 @@ body {
   gap: 16px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+}
+
+.game-header-title-col {
+  min-width: 0;
+  flex: 1;
+}
+
+.game-header-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Space below title row, like `.mode-title` → `.mode-desc` (mode card uses 2px; a bit more here for the inline bee row) */
+.game-header-title-col #game-mode-label {
+  margin-top: 8px;
+}
+
+.game-header-bees {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.game-header-bee-img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
 }
 
 .game-header-metrics {
