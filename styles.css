@@ -58,6 +58,68 @@ body {
   filter: saturate(1.25) contrast(1.22);
 }
 
+/*
+  Honeycomb achievement glow — tune here:
+  • Shape / brightness of ONE pulse: @keyframes honeycomb-glow-shine (percent stops).
+  • How long each pulse lasts + gap between the two pulses: .app-shell--honeycomb-glow::before
+    – animation-iteration-count: 2 runs the keyframes twice.
+    – Time between glow peaks ≈ one full animation-duration (first peak at ~35%, second peak ~35% into the 2nd run).
+    – To make ONLY the gap slightly shorter: lower --honeycomb-pulse-duration a bit (e.g. 2.35s or 2.2s). That also
+      shortens each pulse slightly. Keep app.js honeycombGlowTimerId timeout in sync (~2 × duration + 0.3s).
+*/
+@keyframes honeycomb-glow-shine {
+  0% {
+    opacity: 0.62;
+    filter: saturate(1.25) contrast(1.22) brightness(1);
+    box-shadow: inset 0 0 0 transparent;
+  }
+  35% {
+    opacity: 0.82;
+    filter: saturate(1.55) contrast(1.12) brightness(1.22);
+    box-shadow: inset 0 0 100px rgba(251, 191, 36, 0.45);
+  }
+  70% {
+    opacity: 0.72;
+    filter: saturate(1.4) contrast(1.15) brightness(1.12);
+    box-shadow: inset 0 0 60px rgba(253, 224, 71, 0.28);
+  }
+  100% {
+    opacity: 0.62;
+    filter: saturate(1.25) contrast(1.22) brightness(1);
+    box-shadow: inset 0 0 0 transparent;
+  }
+}
+
+.app-shell.app-shell--honeycomb-glow::before {
+  /* Full pulse length per glow. Slightly shorter gap between the two peaks: try 2.35s (then set app.js timeout ~5000). */
+  --honeycomb-pulse-duration: 2.4s;
+  animation-name: honeycomb-glow-shine;
+  animation-duration: var(--honeycomb-pulse-duration);
+  animation-timing-function: ease-out;
+  animation-iteration-count: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.app-shell--honeycomb-glow::before {
+    --honeycomb-pulse-duration: 0.65s;
+    animation-name: honeycomb-glow-shine-reduced;
+    animation-duration: var(--honeycomb-pulse-duration);
+    animation-timing-function: ease-out;
+    animation-iteration-count: 2;
+  }
+
+  @keyframes honeycomb-glow-shine-reduced {
+    0%,
+    100% {
+      opacity: 0.62;
+    }
+    50% {
+      opacity: 0.82;
+      filter: saturate(1.35) brightness(1.08);
+    }
+  }
+}
+
 .app-shell::after {
   content: "";
   position: absolute;

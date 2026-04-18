@@ -145,6 +145,8 @@ const state = {
   words: [],
   currentIndex: 0,
   score: 0,
+  /** All-time graded correct spellings (persisted); bees = floor(this / 10) */
+  lifetimeCorrectCount: 0,
   attempts: 0,
   mode: "definition", // 'definition' | 'audio'
   lastPromptWord: null,
@@ -196,6 +198,8 @@ const TTS_VOICE_STORAGE_KEY = "spellingBeeTTSVoiceURI";
 const AUTO_NEXT_STORAGE_KEY = "spellingBeeAutoNextWord";
 const SHOW_TIMER_STORAGE_KEY = "spellingBeeShowTimer";
 const SHOW_BEE_PROGRESS_STORAGE_KEY = "spellingBeeShowBeeProgress";
+/** Graded correct spellings ever — used for all-time bee count (survives new games) */
+const LIFETIME_CORRECT_STORAGE_KEY = "spellingBeeLifetimeCorrectCount";
 
 /** Prefer English, then names that usually indicate a female voice per OS/browser lists */
 const TTS_FEMALE_NAME_PATTERNS = [
@@ -257,6 +261,7 @@ const dom = {
   optionAutoNext: document.getElementById("option-auto-next"),
   optionShowBeeProgress: document.getElementById("option-show-bee-progress"),
   optionShowTimer: document.getElementById("option-show-timer"),
+  appShell: document.querySelector(".app-shell"),
 };
 
 function updateSelectedGradeHint(text) {
@@ -326,6 +331,43 @@ function formatDurationSeconds(totalSec) {
     return `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
   }
   return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+/**
+ * Dev/testing only — query params are not persisted unless you submit answers.
+ * Examples:
+ *   ?debugLifetime=19 — bump lifetime bees only (header); not used for honeycomb glow
+ *   ?debugScore=19 — session score after Start; next correct → 20 in this game → honeycomb glow (if bee progress on)
+ *   ?debugScore=5&debugAttempts=5 — session score after Start (attempts defaults to score if omitted)
+ */
+function readDebugQueryParam(name) {
+  try {
+    const v = new URLSearchParams(window.location.search).get(name);
+    if (v === null || v === "") return null;
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0, Math.min(99999, n));
+  } catch (_) {
+    return null;
+  }
+}
+
+function applyDebugLifetimeFromQuery() {
+  const n = readDebugQueryParam("debugLifetime");
+  if (n === null) return;
+  state.lifetimeCorrectCount = n;
+}
+
+function applyDebugSessionScoreFromQuery() {
+  const score = readDebugQueryParam("debugScore");
+  if (score === null) return;
+  const attempts = readDebugQueryParam("debugAttempts");
+  state.score = score;
+  state.attempts = attempts !== null ? Math.max(score, attempts) : score;
+  if (dom.scoreText) {
+    dom.scoreText.textContent = `Score: ${state.score} / ${state.attempts}`;
+  }
+  updateProgressBees();
 }
 
 function isShowTimerEnabled() {
@@ -419,10 +461,72 @@ function clearAutoNextTimeout() {
     clearTimeout(state.autoNextTimeoutId);
     state.autoNextTimeoutId = null;
   }
+  clearGoToNextWordDeferTimer();
 }
 
-function beeProgressCount(score) {
-  return Math.min(BEE_PROGRESS_MAX_ICONS, 1 + Math.floor(score / 10));
+function loadLifetimeCorrectCount() {
+  try {
+    const raw = localStorage.getItem(LIFETIME_CORRECT_STORAGE_KEY);
+    const n = raw === null ? 0 : parseInt(raw, 10);
+    state.lifetimeCorrectCount = Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch (_) {
+    state.lifetimeCorrectCount = 0;
+  }
+}
+
+function persistLifetimeCorrectCount() {
+  try {
+    localStorage.setItem(LIFETIME_CORRECT_STORAGE_KEY, String(state.lifetimeCorrectCount));
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+/** All-time bee count for session summary (localStorage lifetime correct). */
+function getLifetimeBeeCount() {
+  return Math.min(BEE_PROGRESS_MAX_ICONS, Math.floor(state.lifetimeCorrectCount / 10));
+}
+
+/** Bee icons in the header: this game only — 1 per 10 correct in the current round. */
+function getSessionBeeCount() {
+  return Math.min(BEE_PROGRESS_MAX_ICONS, Math.floor(state.score / 10));
+}
+
+/** Must match styles.css `--honeycomb-pulse-duration` × 2 iterations + buffer (see setTimeout below). */
+const HONEYCOMB_GLOW_TOTAL_MS = 5200;
+
+let honeycombGlowTimerId = null;
+/** Wall-clock ms until honeycomb animation ends; used to delay advancing to the next word */
+let honeycombGlowUntilMs = 0;
+/** Pending `goToNextWord` retry after glow (see `goToNextWord`) */
+let goToNextWordDeferTimerId = null;
+
+function clearGoToNextWordDeferTimer() {
+  if (goToNextWordDeferTimerId !== null) {
+    clearTimeout(goToNextWordDeferTimerId);
+    goToNextWordDeferTimerId = null;
+  }
+}
+
+/** Short honeycomb double-pulse when this game’s score hits 20, 40, … (session only; not lifetime bees). */
+function maybeTriggerHoneycombGlowForBeeMilestone() {
+  if (!state.roundStarted || !isShowBeeProgressEnabled()) return;
+  const s = state.score;
+  if (s < 20 || s % 20 !== 0) return;
+  const shell = dom.appShell;
+  if (!shell) return;
+  shell.classList.remove("app-shell--honeycomb-glow");
+  void shell.offsetWidth;
+  shell.classList.add("app-shell--honeycomb-glow");
+  honeycombGlowUntilMs = Date.now() + HONEYCOMB_GLOW_TOTAL_MS;
+  if (honeycombGlowTimerId !== null) {
+    clearTimeout(honeycombGlowTimerId);
+  }
+  honeycombGlowTimerId = window.setTimeout(() => {
+    shell.classList.remove("app-shell--honeycomb-glow");
+    honeycombGlowTimerId = null;
+    honeycombGlowUntilMs = 0;
+  }, HONEYCOMB_GLOW_TOTAL_MS);
 }
 
 function updateProgressBees() {
@@ -443,7 +547,7 @@ function updateProgressBees() {
     return;
   }
   wrap.removeAttribute("aria-hidden");
-  const n = beeProgressCount(state.score);
+  const n = getSessionBeeCount();
   for (let i = 0; i < n; i++) {
     const img = document.createElement("img");
     img.src = BEE_PROGRESS_ICON_SRC;
@@ -454,9 +558,11 @@ function updateProgressBees() {
   }
   wrap.setAttribute(
     "aria-label",
-    n <= 1
-      ? "1 bee — another bee for each 10 correct answers"
-      : `${n} bees — one more for each 10 correct answers`
+    n === 0
+      ? "No bees this game yet — one bee for each 10 correct in this round"
+      : n === 1
+        ? "1 bee this game — one bee for each 10 correct in this round"
+        : `${n} bees this game — one bee for each 10 correct in this round`
   );
 }
 
@@ -496,8 +602,8 @@ function fillSessionSummaryBody(elapsedMs) {
     formatDurationSeconds(elapsedSec)
   )}</span></p>`;
   const ratioLine = `<p class="session-summary-line"><span class="session-summary-label">Correct</span><span class="session-summary-value">${correct} / ${attempts}</span></p>`;
-  const beesEarned = beeProgressCount(correct);
-  const beeLine = `<p class="session-summary-line"><span class="session-summary-label">Bees earned</span><span class="session-summary-value">${beesEarned}</span></p>`;
+  const totalBeesAllTime = getLifetimeBeeCount();
+  const beeLine = `<p class="session-summary-line"><span class="session-summary-label">Bees earned (all time)</span><span class="session-summary-value">${totalBeesAllTime}</span></p>`;
   const pctLine =
     pct === null
       ? `<p class="session-summary-line"><span class="session-summary-label">Accuracy</span><span class="session-summary-value">—</span></p>`
@@ -806,6 +912,14 @@ function initGameOptions() {
       } catch (_) {
         /* ignore */
       }
+      if (!isShowBeeProgressEnabled()) {
+        dom.appShell?.classList.remove("app-shell--honeycomb-glow");
+        honeycombGlowUntilMs = 0;
+        if (honeycombGlowTimerId !== null) {
+          clearTimeout(honeycombGlowTimerId);
+          honeycombGlowTimerId = null;
+        }
+      }
       syncGameChrome();
     });
   }
@@ -1104,7 +1218,12 @@ function renderPrompt() {
 }
 
 function updateScore(correct) {
-  if (correct) state.score += 1;
+  if (correct) {
+    state.score += 1;
+    state.lifetimeCorrectCount += 1;
+    persistLifetimeCorrectCount();
+    maybeTriggerHoneycombGlowForBeeMilestone();
+  }
   state.attempts += 1;
   dom.scoreText.textContent = `Score: ${state.score} / ${state.attempts}`;
   updateProgressBees();
@@ -1176,6 +1295,15 @@ function showCorrectAnswer() {
 function goToNextWord() {
   clearAutoNextTimeout();
   if (!state.hasSubmittedThisWord) return;
+  const glowEnd = honeycombGlowUntilMs;
+  if (glowEnd && Date.now() < glowEnd) {
+    const wait = Math.max(0, glowEnd - Date.now() + 80);
+    goToNextWordDeferTimerId = window.setTimeout(() => {
+      goToNextWordDeferTimerId = null;
+      goToNextWord();
+    }, wait);
+    return;
+  }
   if (state.currentIndex < state.words.length - 1) {
     state.currentIndex += 1;
     renderPrompt();
@@ -1310,6 +1438,7 @@ dom.startGame.addEventListener("click", () => {
   state.roundStarted = true;
   state.gameSessionStartMs = Date.now();
   dom.scoreText.textContent = "Score: 0 / 0";
+  applyDebugSessionScoreFromQuery();
   dom.gameSection.classList.remove("hidden");
   renderPrompt();
   scheduleAutoSpeak(1000);
@@ -1410,6 +1539,8 @@ if (dom.ttsVoiceSelect && !dom.ttsVoiceSelect.dataset.bound) {
     }
   });
 }
+loadLifetimeCorrectCount();
+applyDebugLifetimeFromQuery();
 initGameOptions();
 initGameOptionsCloseOnOutsideClick();
 initGameIdleTimer();
