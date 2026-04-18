@@ -182,7 +182,7 @@ body {
   transition: transform 0.15s ease;
 }
 
-/* Only the main section summary chevron; nested `<details>` (e.g. Options) has its own `[open]` rule */
+/* Step 1 “Load Your Words” summary chevron only */
 .config-details[open] > .config-details-summary .config-details-chevron {
   transform: rotate(-135deg);
   margin-top: 0.42em;
@@ -303,45 +303,98 @@ body {
   margin-top: 8px;
 }
 
-.game-options-details {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(55, 65, 81, 0.65);
+.start-game-card {
+  overflow: visible;
 }
 
-.config-details-body > .game-options-details {
-  margin-top: 14px;
+/* Lift entire card when Options is open so the popover stacks above following sections (e.g. Spelling Round) */
+.start-game-card:has(#game-options-details[open]) {
+  position: relative;
+  z-index: 25;
 }
 
-.game-options-summary {
+.start-game-card-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px 20px;
+}
+
+.start-game-card-primary {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.start-game-card-primary .start-game-card-title {
+  margin: 0;
+}
+
+.start-game-card-primary .start-game-main {
+  margin-top: 12px;
+}
+
+.start-game-card-options-col {
+  flex: 0 0 auto;
+  width: min(17.5rem, 100%);
+  min-width: min(17.5rem, 100%);
+  align-self: stretch;
+}
+
+.start-game-card-options-col .game-options-details.game-options-details--inline {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: none;
+}
+
+.start-game-card-options-col .game-options-sidebar-summary {
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* Match `.score-pill` in the game header (size + pill look) */
+.game-options-sidebar-summary {
   list-style: none;
   cursor: pointer;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   user-select: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #e5e7eb;
+  padding: 6px 14px;
+  min-height: 30px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.15), rgba(15, 23, 42, 0.95));
 }
 
-.game-options-summary::-webkit-details-marker {
+.game-options-sidebar-summary::-webkit-details-marker {
   display: none;
 }
 
-.game-options-summary::marker {
+.game-options-sidebar-summary::marker {
   content: "";
 }
 
-.game-options-summary-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
+.game-options-sidebar-title {
+  line-height: 1.2;
 }
 
-.game-options-details[open] .config-details-chevron {
+.game-options-details[open] > .game-options-sidebar-summary {
+  border-color: rgba(56, 189, 248, 0.65);
+  color: #f1f5f9;
+}
+
+.game-options-details[open] > .game-options-sidebar-summary .config-details-chevron {
   transform: rotate(-135deg);
-  margin-top: 0.42em;
+  margin-top: 0.15em;
 }
 
 .game-options-body {
@@ -351,6 +404,46 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Panel opens to the LEFT of the Options pill (same row, does not push primary column) */
+.start-game-card-options-col .game-options-details--inline .game-options-body {
+  position: absolute;
+  right: calc(100% + 8px);
+  left: auto;
+  top: 0;
+  margin: 0;
+  padding: 10px 12px 11px;
+  width: min(17.5rem, calc(100vw - 40px));
+  max-width: 17.5rem;
+  min-width: 0;
+  box-sizing: border-box;
+  border-top: none;
+  border-radius: 12px;
+  border: 1px solid rgba(75, 85, 99, 0.95);
+  background: rgba(15, 23, 42, 0.99);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35),
+    0 12px 28px rgba(2, 6, 23, 0.55),
+    0 28px 56px rgba(2, 6, 23, 0.5),
+    0 0 0 1px rgba(56, 189, 248, 0.14);
+  gap: 8px;
+  z-index: 1;
+}
+
+.start-game-card .game-options-details--inline .game-option-label {
+  font-size: 0.82rem;
+  line-height: 1.28;
+}
+
+.start-game-card .game-options-details--inline .game-option-row--checkbox .game-option-label {
+  padding-top: 1px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.start-game-card .game-options-details--inline .game-option-checkbox {
+  margin-top: 2px;
 }
 
 .game-options-details .option-tag {
@@ -363,6 +456,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.game-option-row--voice {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.game-option-row--voice .game-option-label {
+  flex-shrink: 0;
+  margin: 0;
+  padding-top: 0;
+}
+
+.game-option-row--voice .tts-voice-select {
+  align-self: auto;
 }
 
 .game-option-row--checkbox {
@@ -437,7 +547,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 0;
   flex-wrap: wrap;
 }
 
@@ -682,12 +792,12 @@ body {
 .session-summary-body {
   font-size: 0.95rem;
   line-height: 1.55;
-  /* One label column (width = longest label) + aligned values + ~4–6ch gap */
+  /* Fixed label column so stats values stay aligned regardless of misspelling list length */
   display: grid;
-  grid-template-columns: max-content max-content;
-  column-gap: 5ch;
+  grid-template-columns: minmax(11.5rem, 12rem) minmax(0, 1fr);
+  column-gap: 0.75rem;
   row-gap: 14px;
-  align-items: baseline;
+  align-items: start;
 }
 
 .session-summary-line {
@@ -705,6 +815,7 @@ body {
   font-variant-numeric: tabular-nums;
   color: #f1f5f9;
   min-width: 0;
+  justify-self: start;
 }
 
 .session-summary-unit {
@@ -726,6 +837,8 @@ body {
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.65);
   border: 1px solid rgba(55, 65, 81, 0.75);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .session-misspell-word {
@@ -788,16 +901,6 @@ body {
   display: none !important;
 }
 
-.app-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-  color: #6b7280;
-  padding-top: 4px;
-  border-top: 1px solid rgba(31, 41, 55, 0.9);
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -836,10 +939,32 @@ body {
     width: 100%;
   }
 
-  .app-footer {
+  .start-game-card-columns {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+  }
+
+  .start-game-card-options-col {
+    width: 100%;
+    min-width: 0;
+    align-self: stretch;
+  }
+
+  .start-game-card-options-col .game-options-details.game-options-details--inline {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .start-game-card-options-col .game-options-details--inline .game-options-body {
+    position: static;
+    align-self: stretch;
+    width: 100%;
+    max-width: none;
+    margin-top: 10px;
+    box-shadow: none;
+    z-index: auto;
   }
 }
 

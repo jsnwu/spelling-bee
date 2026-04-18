@@ -82,30 +82,6 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
                   </details>
                 </section>
               </div>
-              <details class="game-options-details">
-                <summary class="game-options-summary">
-                  <span class="game-options-summary-main">
-                    <span class="panel-title">Options</span>
-                  </span>
-                  <span class="config-details-chevron" aria-hidden="true"></span>
-                </summary>
-                <div class="game-options-body">
-                  <div class="game-option-row">
-                    <label class="game-option-label" for="tts-voice-select">Reading voice</label>
-                    <select id="tts-voice-select" class="grade-select tts-voice-select" aria-label="Reading voice: Aaron or Samantha (en-US)">
-                      <option value="">Loading voices…</option>
-                    </select>
-                  </div>
-                  <div class="game-option-row game-option-row--checkbox">
-                    <input type="checkbox" id="option-auto-next" class="game-option-checkbox" />
-                    <label class="game-option-label" for="option-auto-next">Auto advance next word</label>
-                  </div>
-                  <div class="game-option-row game-option-row--checkbox">
-                    <input type="checkbox" id="option-show-timer" class="game-option-checkbox" />
-                    <label class="game-option-label" for="option-show-timer">Show timer</label>
-                  </div>
-                </div>
-              </details>
             </div>
           </details>
         </section>
@@ -124,11 +100,41 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
           </div>
         </section>
 
-        <section class="card config-card">
-          <h2>3. Start Game</h2>
-          <div class="start-row">
-            <button id="start-game" class="primary-button" disabled>Start Spelling Bee</button>
-            <span id="word-count" class="status-text">0 words loaded</span>
+        <section class="card config-card start-game-card">
+          <div class="start-game-card-columns">
+            <div class="start-game-card-primary">
+              <h2 class="start-game-card-title">3. Start Game</h2>
+              <div class="start-game-main">
+                <div class="start-row">
+                  <button id="start-game" class="primary-button" disabled>Start Spelling Bee</button>
+                  <span id="word-count" class="status-text">0 words loaded</span>
+                </div>
+              </div>
+            </div>
+            <aside class="start-game-card-options-col" aria-label="Game options">
+              <details id="game-options-details" class="game-options-details game-options-details--inline">
+                <summary class="game-options-sidebar-summary">
+                  <span class="game-options-sidebar-title">Options</span>
+                  <span class="config-details-chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="game-options-body">
+                  <div class="game-option-row game-option-row--voice">
+                    <label class="game-option-label" for="tts-voice-select">Voice</label>
+                    <select id="tts-voice-select" class="grade-select tts-voice-select" aria-label="Voice: Aaron or Samantha (en-US)">
+                      <option value="">Loading voices…</option>
+                    </select>
+                  </div>
+                  <div class="game-option-row game-option-row--checkbox">
+                    <input type="checkbox" id="option-auto-next" class="game-option-checkbox" />
+                    <label class="game-option-label" for="option-auto-next">Auto advance next word</label>
+                  </div>
+                  <div class="game-option-row game-option-row--checkbox">
+                    <input type="checkbox" id="option-show-timer" class="game-option-checkbox" />
+                    <label class="game-option-label" for="option-show-timer">Show timer</label>
+                  </div>
+                </div>
+              </details>
+            </aside>
           </div>
         </section>
 
@@ -165,17 +171,13 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
 
           <div class="game-controls">
             <button id="show-hint" class="ghost-button hidden" type="button">Show hint</button>
-            <button id="show-answer" class="ghost-button">Show Answer</button>
+            <button id="show-answer" class="ghost-button" type="button" disabled>Show Answer</button>
             <button id="next-word" class="secondary-button">Next Word</button>
           </div>
 
           <p id="feedback" class="feedback-text"></p>
         </section>
       </main>
-
-      <footer class="app-footer">
-        <span>Spelling Bee Studio</span>
-      </footer>
 
       <dialog id="session-summary-dialog" class="session-summary-dialog" aria-labelledby="session-summary-title">
         <form method="dialog" class="session-summary-form">

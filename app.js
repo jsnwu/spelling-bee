@@ -156,6 +156,8 @@ const state = {
   hasSubmittedThisWord: false,
   /** Correct answer submitted — input locked; prevents duplicate scoring */
   answerLocked: false,
+  /** Last graded spelling (trimmed, lowercased) for this word — blocks duplicate submits */
+  lastGradedAnswerLower: "",
   /** Concise definition for audio mode; shown only after "Show hint" */
   audioHintDefinition: "",
   /** Auto TTS (and speak-after-next-word) only after "Start Spelling Bee" */
@@ -172,7 +174,7 @@ const state = {
 const SUBMIT_BUTTON_LABEL = "Submit";
 const SUBMIT_BUTTON_NEXT_LABEL = ">>";
 /** Delay before auto-advance to the next word after a correct answer (when enabled) */
-const AUTO_ADVANCE_AFTER_CORRECT_MS = 2200;
+const AUTO_ADVANCE_AFTER_CORRECT_MS = 2000;
 
 /** Default TTS speed (auto-speak after each prompt) */
 const SPEECH_RATE_DEFAULT = 0.9;
@@ -227,6 +229,7 @@ const dom = {
   gradeSelect: document.getElementById("grade-select"),
   selectedGradeHint: document.getElementById("selected-grade-hint"),
   configDetails: document.querySelector(".config-details"),
+  gameOptionsDetails: document.getElementById("game-options-details"),
   downloadCsv: document.getElementById("download-csv"),
   showHint: document.getElementById("show-hint"),
   showAnswer: document.getElementById("show-answer"),
@@ -253,9 +256,16 @@ function updateSubmitButtonAppearance() {
   if (state.answerLocked) {
     btn.textContent = SUBMIT_BUTTON_NEXT_LABEL;
     btn.setAttribute("aria-label", "Next word");
+    btn.disabled = false;
   } else {
     btn.textContent = SUBMIT_BUTTON_LABEL;
     btn.setAttribute("aria-label", "Submit spelling");
+    const cur = dom.answerInput ? dom.answerInput.value.trim().toLowerCase() : "";
+    const duplicateResubmit =
+      state.hasSubmittedThisWord &&
+      cur.length > 0 &&
+      cur === state.lastGradedAnswerLower;
+    btn.disabled = duplicateResubmit;
   }
 }
 
@@ -344,6 +354,9 @@ function clearAutoNextTimeout() {
 
 function syncGameChrome() {
   if (dom.stopGame) dom.stopGame.disabled = !state.roundStarted;
+  if (dom.showAnswer) {
+    dom.showAnswer.disabled = !(state.roundStarted && !!currentWord());
+  }
   const showTimer = isShowTimerEnabled();
   if (dom.gameTimer) {
     const visible = state.roundStarted && showTimer;
@@ -372,7 +385,7 @@ function fillSessionSummaryBody(elapsedMs) {
   const timeLine = `<p class="session-summary-line"><span class="session-summary-label">Time</span><span class="session-summary-value">${escapeHtml(
     formatDurationSeconds(elapsedSec)
   )}</span></p>`;
-  const ratioLine = `<p class="session-summary-line"><span class="session-summary-label">Correct</span><span class="session-summary-value">${correct} / ${attempts} <span class="session-summary-unit">answered</span></span></p>`;
+  const ratioLine = `<p class="session-summary-line"><span class="session-summary-label">Correct</span><span class="session-summary-value">${correct} / ${attempts}</span></p>`;
   const pctLine =
     pct === null
       ? `<p class="session-summary-line"><span class="session-summary-label">Accuracy</span><span class="session-summary-value">—</span></p>`
@@ -454,6 +467,7 @@ function showSpellingRoundCard() {
   state.attempts = 0;
   state.hasSubmittedThisWord = false;
   state.answerLocked = false;
+  state.lastGradedAnswerLower = "";
   clearSessionTracking();
   dom.scoreText.textContent = "Score: 0 / 0";
   dom.gameSection.classList.remove("hidden");
@@ -640,9 +654,10 @@ function populateTtsVoiceSelect(voices) {
 function initGameOptions() {
   if (dom.optionAutoNext) {
     try {
-      dom.optionAutoNext.checked = localStorage.getItem(AUTO_NEXT_STORAGE_KEY) === "1";
+      const stored = localStorage.getItem(AUTO_NEXT_STORAGE_KEY);
+      dom.optionAutoNext.checked = stored === null ? true : stored === "1";
     } catch (_) {
-      dom.optionAutoNext.checked = false;
+      dom.optionAutoNext.checked = true;
     }
   }
   if (dom.optionShowTimer) {
@@ -677,6 +692,18 @@ function initGameOptions() {
       syncGameChrome();
     });
   }
+}
+
+function initGameOptionsCloseOnOutsideClick() {
+  if (!dom.gameOptionsDetails || dom.gameOptionsDetails.dataset.outsideClickBound) return;
+  dom.gameOptionsDetails.dataset.outsideClickBound = "1";
+  document.addEventListener("click", (e) => {
+    const details = dom.gameOptionsDetails;
+    if (!details || !details.open) return;
+    const t = e.target;
+    if (t && details.contains(t)) return;
+    details.open = false;
+  });
 }
 
 function initTtsVoices() {
@@ -790,7 +817,6 @@ function renderPrompt() {
     dom.submitAnswer.setAttribute("aria-label", "Submit spelling");
     dom.nextWord.disabled = true;
     resetShowHintButton();
-    if (dom.showAnswer) dom.showAnswer.disabled = true;
     syncGameChrome();
     return;
   }
@@ -798,6 +824,7 @@ function renderPrompt() {
   if (!state.roundStarted) {
     state.hasSubmittedThisWord = false;
     state.answerLocked = false;
+    state.lastGradedAnswerLower = "";
     resetShowHintButton();
 
     if (state.mode === "definition") {
@@ -822,7 +849,6 @@ function renderPrompt() {
     updateSubmitButtonAppearance();
     dom.feedback.textContent = "";
     dom.feedback.className = "feedback-text";
-    if (dom.showAnswer) dom.showAnswer.disabled = true;
     syncGameChrome();
     return;
   }
@@ -830,6 +856,7 @@ function renderPrompt() {
   // New prompt, reset enter/next state
   state.hasSubmittedThisWord = false;
   state.answerLocked = false;
+  state.lastGradedAnswerLower = "";
 
   const word = (entry.word || entry.term || "").trim();
   // In our default CSV, "Sentense" is the full sentence prompt, and "Definition" is a concise meaning.
@@ -929,7 +956,6 @@ function renderPrompt() {
   updateSubmitButtonAppearance();
   dom.feedback.textContent = "";
   dom.feedback.className = "feedback-text";
-  if (dom.showAnswer) dom.showAnswer.disabled = false;
   dom.answerInput.focus();
   syncGameChrome();
 }
@@ -952,11 +978,16 @@ function handleSubmitAnswer() {
 
   if (!userAnswer) return;
 
+  if (state.hasSubmittedThisWord && userAnswer === state.lastGradedAnswerLower) {
+    return;
+  }
+
   state.hasSubmittedThisWord = true;
   if (dom.nextWord) dom.nextWord.disabled = false;
 
   const isCorrect = userAnswer === correctLower;
   updateScore(isCorrect);
+  state.lastGradedAnswerLower = userAnswer;
 
   if (isCorrect) {
     state.answerLocked = true;
@@ -978,7 +1009,6 @@ function handleSubmitAnswer() {
       word: correctWord,
       typed: dom.answerInput.value.trim(),
     });
-    dom.submitAnswer.disabled = false;
     dom.answerInput.disabled = false;
     updateSubmitButtonAppearance();
     dom.feedback.innerHTML = `Not quite. The correct spelling is <span class="feedback-highlight-word">${escapeHtml(
@@ -1025,7 +1055,6 @@ function goToNextWord() {
     dom.submitAnswer.setAttribute("aria-label", "Submit spelling");
     dom.nextWord.disabled = true;
     resetShowHintButton();
-    if (dom.showAnswer) dom.showAnswer.disabled = true;
     openSessionSummaryDialog(elapsedMs);
     syncGameChrome();
   }
@@ -1141,6 +1170,7 @@ dom.startGame.addEventListener("click", () => {
   syncGameChrome();
   startSessionTimer();
   if (dom.configDetails) dom.configDetails.open = false;
+  if (dom.gameOptionsDetails) dom.gameOptionsDetails.open = false;
 });
 
 if (dom.stopGame) {
@@ -1169,6 +1199,10 @@ dom.submitAnswer.addEventListener("click", () => {
   } else {
     handleSubmitAnswer();
   }
+});
+
+dom.answerInput.addEventListener("input", () => {
+  if (!state.answerLocked) updateSubmitButtonAppearance();
 });
 
 dom.answerInput.addEventListener("keydown", (e) => {
@@ -1227,6 +1261,7 @@ if (dom.ttsVoiceSelect && !dom.ttsVoiceSelect.dataset.bound) {
   });
 }
 initGameOptions();
+initGameOptionsCloseOnOutsideClick();
 initTtsVoices();
 
 // Load default CSV from words/3rd-grade-words.csv if available
