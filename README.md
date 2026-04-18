@@ -44,11 +44,11 @@ Apple,"I ate a red apple for lunch.",AP-uhl,"A round fruit with firm flesh"
 
 ## Gameplay flow
 
-1. **Load words** — Built-in grade lists or your CSV. When a list loads successfully, the **Spelling Round** card opens so you can see mode and score, but the actual prompt (sentence + speaker, or audio row) stays hidden until you start.
+1. **Load words** — Expand **1. Load Your Words** to pick a grade or upload a CSV. Below that, **Options** (optional) is **collapsed by default**—expand it to set **reading voice** (**Aaron** or **Samantha**, **en-US** only when the OS exposes them; default **Samantha** when available), **auto-advance** after a correct answer, and whether to **show a live session timer** in the game header during a round. Preferences are stored in **localStorage**. When a list loads successfully, the **Spelling Round** card opens so you can see mode and score, but the actual prompt stays hidden until you start.
 2. **Choose mode** — Default is **Word in Sentence → Spell**. You can switch before or between rounds; the card updates when the round is not active.
 3. **Start Spelling Bee** — Shuffles the list, resets score, reveals the prompt, and enables automatic text-to-speech for new words (after a short delay). Manual **Speak** / **Show hint** still work anytime after start.
 4. **Stop** — Ends the active round (cancels pending speech), then opens a **session summary** dialog with:
-   - **Time** — Elapsed since you clicked Start (no live clock in the header).
+   - **Time** — Elapsed since you clicked Start (optionally mirrored as a live timer in the header if **Show session timer** is enabled under Options).
    - **Correct / answered** — Graded submits in this session.
    - **Accuracy** — Percent correct over those attempts.
    - **Misspellings** — Each wrong submit (target word and what you typed). Finishing the last word in the list opens the same summary automatically.

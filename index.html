@@ -82,7 +82,30 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
                   </details>
                 </section>
               </div>
-              <p id="load-status" class="status-text"></p>
+              <details class="game-options-details">
+                <summary class="game-options-summary">
+                  <span class="game-options-summary-main">
+                    <span class="panel-title">Options</span>
+                  </span>
+                  <span class="config-details-chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="game-options-body">
+                  <div class="game-option-row">
+                    <label class="game-option-label" for="tts-voice-select">Reading voice</label>
+                    <select id="tts-voice-select" class="grade-select tts-voice-select" aria-label="Reading voice: Aaron or Samantha (en-US)">
+                      <option value="">Loading voices…</option>
+                    </select>
+                  </div>
+                  <div class="game-option-row game-option-row--checkbox">
+                    <input type="checkbox" id="option-auto-next" class="game-option-checkbox" />
+                    <label class="game-option-label" for="option-auto-next">Auto advance next word</label>
+                  </div>
+                  <div class="game-option-row game-option-row--checkbox">
+                    <input type="checkbox" id="option-show-timer" class="game-option-checkbox" />
+                    <label class="game-option-label" for="option-show-timer">Show timer</label>
+                  </div>
+                </div>
+              </details>
             </div>
           </details>
         </section>
@@ -116,6 +139,7 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
               <p id="game-mode-label" class="helper-text"></p>
             </div>
             <div class="game-header-metrics">
+              <span id="game-timer" class="game-timer" hidden aria-live="polite">0:00</span>
               <button id="stop-game" class="ghost-button" type="button" disabled>Stop</button>
               <div class="score-pill">
                 <span id="score-text">Score: 0 / 0</span>

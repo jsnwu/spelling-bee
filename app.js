@@ -163,20 +163,59 @@ const state = {
   gameSessionStartMs: null,
   /** Wrong graded submits: { word, typed } */
   misspellings: [],
+  /** `setInterval` id for live session timer (when enabled) */
+  sessionTimerId: null,
+  /** Pending auto-advance after a correct answer */
+  autoNextTimeoutId: null,
 };
 
 const SUBMIT_BUTTON_LABEL = "Submit";
 const SUBMIT_BUTTON_NEXT_LABEL = ">>";
+/** Delay before auto-advance to the next word after a correct answer (when enabled) */
+const AUTO_ADVANCE_AFTER_CORRECT_MS = 2200;
 
 /** Default TTS speed (auto-speak after each prompt) */
 const SPEECH_RATE_DEFAULT = 0.9;
 /** Slower playback when the user taps the speaker button */
 const SPEECH_RATE_SPEAKER_BUTTON = 0.5;
 
+const TTS_VOICE_STORAGE_KEY = "spellingBeeTTSVoiceURI";
+const AUTO_NEXT_STORAGE_KEY = "spellingBeeAutoNextWord";
+const SHOW_TIMER_STORAGE_KEY = "spellingBeeShowTimer";
+
+/** Prefer English, then names that usually indicate a female voice per OS/browser lists */
+const TTS_FEMALE_NAME_PATTERNS = [
+  /female/i,
+  /woman/i,
+  /samantha/i,
+  /karen\b/i,
+  /moira/i,
+  /tessa/i,
+  /fiona/i,
+  /serena/i,
+  /victoria/i,
+  /veena/i,
+  /zira/i,
+  /hazel/i,
+  /susan/i,
+  /allison/i,
+  /\bava\b/i,
+  /\bkate\b/i,
+  /joanna/i,
+  /\bivy\b/i,
+  /sarah/i,
+  /laura/i,
+  /emily/i,
+  /catherine/i,
+  /martha/i,
+  /heather/i,
+  /linda/i,
+  /microsoft zira/i,
+];
+
 const dom = {
   fileInput: document.getElementById("csv-input"),
   fileName: document.getElementById("file-name"),
-  loadStatus: document.getElementById("load-status"),
   wordCount: document.getElementById("word-count"),
   modeButtons: Array.from(document.querySelectorAll(".mode-button")),
   startGame: document.getElementById("start-game"),
@@ -197,6 +236,10 @@ const dom = {
   stopGame: document.getElementById("stop-game"),
   sessionSummaryDialog: document.getElementById("session-summary-dialog"),
   sessionSummaryBody: document.getElementById("session-summary-body"),
+  ttsVoiceSelect: document.getElementById("tts-voice-select"),
+  gameTimer: document.getElementById("game-timer"),
+  optionAutoNext: document.getElementById("option-auto-next"),
+  optionShowTimer: document.getElementById("option-show-timer"),
 };
 
 function updateSelectedGradeHint(text) {
@@ -261,11 +304,61 @@ function formatDurationSeconds(totalSec) {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
+function isShowTimerEnabled() {
+  return dom.optionShowTimer?.checked === true;
+}
+
+function isAutoNextEnabled() {
+  return dom.optionAutoNext?.checked === true;
+}
+
+function stopSessionTimer() {
+  if (state.sessionTimerId !== null) {
+    clearInterval(state.sessionTimerId);
+    state.sessionTimerId = null;
+  }
+  if (dom.gameTimer) dom.gameTimer.textContent = "0:00";
+}
+
+function updateGameTimerLabel() {
+  if (!dom.gameTimer || !state.gameSessionStartMs) return;
+  const sec = (Date.now() - state.gameSessionStartMs) / 1000;
+  dom.gameTimer.textContent = formatDurationSeconds(sec);
+}
+
+function startSessionTimer() {
+  stopSessionTimer();
+  if (!dom.gameTimer || !isShowTimerEnabled() || !state.roundStarted || !state.gameSessionStartMs) {
+    return;
+  }
+  updateGameTimerLabel();
+  state.sessionTimerId = window.setInterval(updateGameTimerLabel, 1000);
+}
+
+function clearAutoNextTimeout() {
+  if (state.autoNextTimeoutId !== null) {
+    clearTimeout(state.autoNextTimeoutId);
+    state.autoNextTimeoutId = null;
+  }
+}
+
 function syncGameChrome() {
   if (dom.stopGame) dom.stopGame.disabled = !state.roundStarted;
+  const showTimer = isShowTimerEnabled();
+  if (dom.gameTimer) {
+    const visible = state.roundStarted && showTimer;
+    dom.gameTimer.hidden = !visible;
+    if (!visible) {
+      dom.gameTimer.textContent = "0:00";
+    } else if (state.gameSessionStartMs) {
+      updateGameTimerLabel();
+    }
+  }
 }
 
 function clearSessionTracking() {
+  stopSessionTimer();
+  clearAutoNextTimeout();
   state.gameSessionStartMs = null;
   state.misspellings = [];
 }
@@ -315,6 +408,8 @@ function handleStopGame() {
     clearTimeout(state.autoSpeakTimeoutId);
     state.autoSpeakTimeoutId = null;
   }
+  clearAutoNextTimeout();
+  stopSessionTimer();
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
@@ -431,7 +526,6 @@ function loadWordsFromCsvText(csvText, sourceLabel) {
   const rows = parseCsv(csvText);
   const filtered = rows.filter((row) => (row.word || row.term || "").trim().length > 0);
   if (filtered.length === 0) {
-    dom.loadStatus.textContent = "No rows with a 'word' column were found.";
     state.words = [];
     updateWordCount();
     hideGameSection();
@@ -441,7 +535,6 @@ function loadWordsFromCsvText(csvText, sourceLabel) {
   shuffleInPlace(filtered);
   state.words = filtered;
   if (sourceLabel) dom.fileName.textContent = sourceLabel;
-  dom.loadStatus.textContent = `Loaded ${filtered.length} words.`;
   updateWordCount();
   showSpellingRoundCard();
   return true;
@@ -457,6 +550,145 @@ function speakWord(word, rate = SPEECH_RATE_DEFAULT) {
   speakText(word, rate);
 }
 
+function normalizeVoiceLang(lang) {
+  return String(lang || "").replace("_", "-").toLowerCase();
+}
+
+/** Only United States English voices */
+function isEnUsVoice(v) {
+  return normalizeVoiceLang(v.lang).startsWith("en-us");
+}
+
+/** Picker is limited to the Aaron and Samantha system voices (en-US) when present */
+function isAaronOrSamanthaVoice(v) {
+  const n = v.name || "";
+  return /aaron/i.test(n) || /samantha/i.test(n);
+}
+
+function filterAllowedVoices(voices) {
+  return (voices || []).filter((v) => isEnUsVoice(v) && isAaronOrSamanthaVoice(v));
+}
+
+function pickDefaultFemaleVoice(voices) {
+  const pool = filterAllowedVoices(voices);
+  if (!pool.length) return null;
+  for (const re of TTS_FEMALE_NAME_PATTERNS) {
+    const hit = pool.find((v) => re.test(v.name || ""));
+    if (hit) return hit;
+  }
+  return pool[0];
+}
+
+function getSelectedTtsVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const allowed = filterAllowedVoices(voices);
+  if (!allowed.length) return null;
+  let saved = null;
+  try {
+    saved = localStorage.getItem(TTS_VOICE_STORAGE_KEY);
+  } catch (_) {
+    /* ignore */
+  }
+  if (saved) {
+    const match = allowed.find((v) => v.voiceURI === saved);
+    if (match) return match;
+  }
+  return pickDefaultFemaleVoice(voices);
+}
+
+function populateTtsVoiceSelect(voices) {
+  const sel = dom.ttsVoiceSelect;
+  if (!sel) return;
+  if (!voices.length) {
+    sel.innerHTML = '<option value="">No voices available (try again)</option>';
+    return;
+  }
+  const sorted = filterAllowedVoices(voices).sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "")
+  );
+  if (!sorted.length) {
+    sel.innerHTML = '<option value="">Aaron / Samantha (en-US) not available</option>';
+    return;
+  }
+  sel.innerHTML = "";
+  for (const v of sorted) {
+    const opt = document.createElement("option");
+    opt.value = v.voiceURI;
+    opt.textContent = `${v.name} (${v.lang})`;
+    sel.appendChild(opt);
+  }
+  let saved = null;
+  try {
+    saved = localStorage.getItem(TTS_VOICE_STORAGE_KEY);
+  } catch (_) {
+    /* ignore */
+  }
+  const preferred = pickDefaultFemaleVoice(voices);
+  if (saved && sorted.some((v) => v.voiceURI === saved)) {
+    sel.value = saved;
+  } else if (preferred) {
+    sel.value = preferred.voiceURI;
+    try {
+      localStorage.setItem(TTS_VOICE_STORAGE_KEY, preferred.voiceURI);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
+function initGameOptions() {
+  if (dom.optionAutoNext) {
+    try {
+      dom.optionAutoNext.checked = localStorage.getItem(AUTO_NEXT_STORAGE_KEY) === "1";
+    } catch (_) {
+      dom.optionAutoNext.checked = false;
+    }
+  }
+  if (dom.optionShowTimer) {
+    try {
+      dom.optionShowTimer.checked = localStorage.getItem(SHOW_TIMER_STORAGE_KEY) === "1";
+    } catch (_) {
+      dom.optionShowTimer.checked = false;
+    }
+  }
+  if (dom.optionAutoNext && !dom.optionAutoNext.dataset.bound) {
+    dom.optionAutoNext.dataset.bound = "1";
+    dom.optionAutoNext.addEventListener("change", () => {
+      try {
+        localStorage.setItem(AUTO_NEXT_STORAGE_KEY, dom.optionAutoNext.checked ? "1" : "0");
+      } catch (_) {
+        /* ignore */
+      }
+    });
+  }
+  if (dom.optionShowTimer && !dom.optionShowTimer.dataset.bound) {
+    dom.optionShowTimer.dataset.bound = "1";
+    dom.optionShowTimer.addEventListener("change", () => {
+      try {
+        localStorage.setItem(SHOW_TIMER_STORAGE_KEY, dom.optionShowTimer.checked ? "1" : "0");
+      } catch (_) {
+        /* ignore */
+      }
+      if (state.roundStarted && state.gameSessionStartMs) {
+        if (isShowTimerEnabled()) startSessionTimer();
+        else stopSessionTimer();
+      }
+      syncGameChrome();
+    });
+  }
+}
+
+function initTtsVoices() {
+  if (!("speechSynthesis" in window) || !dom.ttsVoiceSelect) return;
+  const refresh = () => {
+    const voices = window.speechSynthesis.getVoices();
+    populateTtsVoiceSelect(voices);
+  };
+  refresh();
+  window.speechSynthesis.addEventListener("voiceschanged", refresh);
+}
+
 function speakText(text, rate = SPEECH_RATE_DEFAULT) {
   if (!("speechSynthesis" in window)) {
     alert("Text-to-speech is not supported in this browser.");
@@ -467,6 +699,11 @@ function speakText(text, rate = SPEECH_RATE_DEFAULT) {
   const utterance = new SpeechSynthesisUtterance(trimmed);
   utterance.rate = rate;
   utterance.pitch = 1.0;
+  const voice = getSelectedTtsVoice();
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang || "en-US";
+  }
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 }
@@ -729,6 +966,13 @@ function handleSubmitAnswer() {
     dom.feedback.innerHTML = `Correct! <span class="feedback-highlight-word">${escapeHtml(correctWord)}</span>`;
     dom.feedback.className = "feedback-text feedback-correct";
     playCorrectDing();
+    if (isAutoNextEnabled()) {
+      state.autoNextTimeoutId = window.setTimeout(() => {
+        state.autoNextTimeoutId = null;
+        if (!state.roundStarted || !state.answerLocked) return;
+        goToNextWord();
+      }, AUTO_ADVANCE_AFTER_CORRECT_MS);
+    }
   } else {
     state.misspellings.push({
       word: correctWord,
@@ -755,6 +999,7 @@ function showCorrectAnswer() {
 }
 
 function goToNextWord() {
+  clearAutoNextTimeout();
   if (!state.hasSubmittedThisWord) return;
   if (state.currentIndex < state.words.length - 1) {
     state.currentIndex += 1;
@@ -766,6 +1011,7 @@ function goToNextWord() {
       clearTimeout(state.autoSpeakTimeoutId);
       state.autoSpeakTimeoutId = null;
     }
+    stopSessionTimer();
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
@@ -790,7 +1036,6 @@ dom.fileInput.addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) {
     dom.fileName.textContent = "No file selected";
-    dom.loadStatus.textContent = "";
     state.words = [];
     updateWordCount();
     hideGameSection();
@@ -798,25 +1043,21 @@ dom.fileInput.addEventListener("change", (e) => {
   }
 
   dom.fileName.textContent = file.name;
-  dom.loadStatus.textContent = "Loading words…";
 
   const reader = new FileReader();
   reader.onload = (event) => {
     try {
       const text = String(event.target?.result || "");
       loadWordsFromCsvText(text, file.name);
-      dom.loadStatus.textContent = `Loaded ${state.words.length} words successfully.`;
       updateSelectedGradeHint(`Custom: ${file.name}`);
     } catch (err) {
       console.error(err);
-      dom.loadStatus.textContent = "Failed to parse CSV. Please check the format.";
       state.words = [];
       updateWordCount();
       hideGameSection();
     }
   };
   reader.onerror = () => {
-    dom.loadStatus.textContent = "Error reading file.";
     state.words = [];
     updateWordCount();
     hideGameSection();
@@ -829,7 +1070,6 @@ function loadSelectedGrade() {
   if (!dom.gradeSelect || !window.fetch) return;
   const path = gradeValueToCsvPath(dom.gradeSelect.value);
   if (!path) return;
-  dom.loadStatus.textContent = "Loading grade list…";
   fetch(path)
     .then((res) => {
       if (!res.ok) throw new Error("Grade CSV not found");
@@ -838,14 +1078,13 @@ function loadSelectedGrade() {
     .then((text) => {
       const ok = loadWordsFromCsvText(text, `${path} (built-in)`);
       if (ok) {
-        dom.loadStatus.textContent = `Loaded ${state.words.length} words from ${path}.`;
         const selectedLabel =
           dom.gradeSelect.options[dom.gradeSelect.selectedIndex]?.textContent || dom.gradeSelect.value;
         updateSelectedGradeHint(`Built-in: ${selectedLabel}`);
       }
     })
     .catch(() => {
-      dom.loadStatus.textContent = `Could not load ${path}.`;
+      /* Could not load grade CSV */
     });
 }
 
@@ -900,6 +1139,7 @@ dom.startGame.addEventListener("click", () => {
   renderPrompt();
   scheduleAutoSpeak(1000);
   syncGameChrome();
+  startSessionTimer();
   if (dom.configDetails) dom.configDetails.open = false;
 });
 
@@ -976,6 +1216,19 @@ dom.nextWord.addEventListener("click", () => {
   goToNextWord();
 });
 
+if (dom.ttsVoiceSelect && !dom.ttsVoiceSelect.dataset.bound) {
+  dom.ttsVoiceSelect.dataset.bound = "1";
+  dom.ttsVoiceSelect.addEventListener("change", () => {
+    try {
+      localStorage.setItem(TTS_VOICE_STORAGE_KEY, dom.ttsVoiceSelect.value);
+    } catch (_) {
+      /* ignore */
+    }
+  });
+}
+initGameOptions();
+initTtsVoices();
+
 // Load default CSV from words/3rd-grade-words.csv if available
 (function loadDefaultCsv() {
   if (!window.fetch) return;
@@ -988,7 +1241,6 @@ dom.nextWord.addEventListener("click", () => {
     .then((text) => {
       const ok = loadWordsFromCsvText(text, "words/3rd-grade-words.csv (default)");
       if (!ok) return;
-      dom.loadStatus.textContent = `Loaded ${state.words.length} words from default list.`;
       if (dom.gradeSelect) dom.gradeSelect.value = "3rd";
       updateSelectedGradeHint("Built-in: 3rd grade (default)");
     })

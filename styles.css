@@ -182,7 +182,8 @@ body {
   transition: transform 0.15s ease;
 }
 
-.config-details[open] .config-details-chevron {
+/* Only the main section summary chevron; nested `<details>` (e.g. Options) has its own `[open]` rule */
+.config-details[open] > .config-details-summary .config-details-chevron {
   transform: rotate(-135deg);
   margin-top: 0.42em;
 }
@@ -300,6 +301,101 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
   margin-top: 8px;
+}
+
+.game-options-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(55, 65, 81, 0.65);
+}
+
+.config-details-body > .game-options-details {
+  margin-top: 14px;
+}
+
+.game-options-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  user-select: none;
+}
+
+.game-options-summary::-webkit-details-marker {
+  display: none;
+}
+
+.game-options-summary::marker {
+  content: "";
+}
+
+.game-options-summary-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.game-options-details[open] .config-details-chevron {
+  transform: rotate(-135deg);
+  margin-top: 0.42em;
+}
+
+.game-options-body {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(55, 65, 81, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-options-details .option-tag {
+  font-weight: 500;
+  font-size: 0.88em;
+  color: #9ca3af;
+}
+
+.game-option-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.game-option-row--checkbox {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.game-option-label {
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: #d1d5db;
+}
+
+.game-option-row--checkbox .game-option-label {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.game-option-checkbox {
+  margin-top: 3px;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  accent-color: #38bdf8;
+}
+
+/* Match `.grade-select` in `.grade-row`: intrinsic width + shared min-width, not full panel width */
+.tts-voice-select {
+  width: auto;
+  align-self: flex-start;
+  max-width: 100%;
 }
 
 .mode-button {
@@ -434,6 +530,14 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.game-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  color: #93c5fd;
+  min-width: 3.25rem;
+  text-align: right;
 }
 
 .score-pill {
