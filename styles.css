@@ -707,11 +707,6 @@ body {
   flex-wrap: wrap;
 }
 
-/* Space below title row, like `.mode-title` → `.mode-desc` (mode card uses 2px; a bit more here for the inline bee row) */
-.game-header-title-col #game-mode-label {
-  margin-top: 8px;
-}
-
 .game-header-bees {
   display: inline-flex;
   align-items: center;
@@ -771,8 +766,8 @@ body {
 }
 
 .prompt-content {
-  font-size: 1rem;
-  line-height: 1.4;
+  font-size: 1.12rem;
+  line-height: 1.45;
 }
 
 .prompt-main-row {
@@ -785,6 +780,11 @@ body {
 .prompt-main-row > .prompt-content {
   flex: 1;
   min-width: 0;
+}
+
+/* Definition sentence sits in .prompt-content directly; audio puts #audio-prompt-lead inside with .hint-text margin-top — match that inset */
+.prompt-main-row > .prompt-content:not(:has(#audio-prompt-lead)) {
+  padding-top: 6px;
 }
 
 .hint-text {
@@ -861,6 +861,18 @@ body {
   box-sizing: border-box;
   background: #0f172a;
   color: #e5e7eb;
+  /* Avoid clipping above the viewport (default centered dialog can go negative top when tall) */
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  --session-dialog-inset-top: max(1.75rem, calc(env(safe-area-inset-top, 0px) + 1rem));
+  --session-dialog-inset-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  top: var(--session-dialog-inset-top);
+  max-height: calc(100vh - var(--session-dialog-inset-top) - var(--session-dialog-inset-bottom));
+  max-height: calc(100dvh - var(--session-dialog-inset-top) - var(--session-dialog-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .session-summary-dialog::backdrop {

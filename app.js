@@ -238,7 +238,6 @@ const dom = {
   modeButtons: Array.from(document.querySelectorAll(".mode-button")),
   startGame: document.getElementById("start-game"),
   gameSection: document.getElementById("game-section"),
-  gameModeLabel: document.getElementById("game-mode-label"),
   promptArea: document.getElementById("prompt-area"),
   answerInput: document.getElementById("answer-input"),
   submitAnswer: document.getElementById("submit-answer"),
@@ -1085,10 +1084,8 @@ function renderPrompt() {
     resetShowHintButton();
 
     if (state.mode === "definition") {
-      dom.gameModeLabel.textContent = "Mode: Word in Sentence ➜ Spell the word";
       dom.promptArea.innerHTML = `<p class="helper-text prompt-standby">Click <strong>Start Spelling Bee</strong> in the section above to reveal the sentence and begin your round.</p>`;
     } else {
-      dom.gameModeLabel.textContent = "Mode: Spoken word ➜ Spell the word";
       state.audioHintDefinition = "";
       state.definitionForSpeech = "";
       state.lastPromptWord = (entry.word || entry.term || "").trim();
@@ -1122,7 +1119,6 @@ function renderPrompt() {
 
   if (state.mode === "definition") {
     resetShowHintButton();
-    dom.gameModeLabel.textContent = "Mode: Word in Sentence ➜ Spell the word";
 
     // Remove surrounding quotes for both on-screen and spoken text
     let baseDefinition = definition.replace(/^"(.*)"$/, "$1");
@@ -1161,7 +1157,6 @@ function renderPrompt() {
       .replace(/^"(.*)"$/, "$1");
     state.audioHintDefinition = briefDefinition;
 
-    dom.gameModeLabel.textContent = "Mode: Spoken word ➜ Spell the word";
     dom.promptArea.innerHTML = `
       <div class="prompt-label">Audio prompt</div>
       <div class="prompt-main-row">
