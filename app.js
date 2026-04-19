@@ -1,3 +1,4 @@
+/* CSV & string helpers */
 function parseCsvLine(line) {
   const out = [];
   let cur = "";
@@ -141,6 +142,7 @@ function maskAnswerWord(sentence, answer) {
   return text.replace(new RegExp(`(${escaped})`, "gi"), "_____");
 }
 
+/* Application state */
 const state = {
   words: [],
   currentIndex: 0,
@@ -189,9 +191,6 @@ const IDLE_PAUSE_AFTER_MS = 10_000;
 const BEE_PROGRESS_ICON_SRC = "assets/bee-icon.png";
 const BEE_PROGRESS_MAX_ICONS = 12;
 
-/** Last session bee count rendered in the header (for one-shot glow on new bees) */
-let lastRenderedSessionBeeCount = 0;
-
 /** Default TTS speed (auto-speak after each prompt) */
 const SPEECH_RATE_DEFAULT = 0.9;
 /** Slower playback when the user taps the speaker button */
@@ -203,6 +202,25 @@ const SHOW_TIMER_STORAGE_KEY = "spellingBeeShowTimer";
 const SHOW_BEE_PROGRESS_STORAGE_KEY = "spellingBeeShowBeeProgress";
 /** Graded correct spellings ever — used for all-time bee count (survives new games) */
 const LIFETIME_CORRECT_STORAGE_KEY = "spellingBeeLifetimeCorrectCount";
+
+/* ─— Honeycomb shell glow & full-list finish celebration (keep in sync with styles.css) —— */
+/** ~ `--honeycomb-pulse-duration` (1.05s) + buffer; used for milestone glow + finish-cheer cleanup */
+const HONEYCOMB_GLOW_TOTAL_MS = 1300;
+const FINISH_CELEBRATION_DIALOG_DELAY_MS = 9000;
+const FINISH_CELEBRATION_CLEANUP_MS = 12000;
+const FINISH_CELEBRATION_BUZZ_MS = 8400;
+const POPPER_POP_ROUNDS = 5;
+const POPPER_POP_GAP_MS = 1000;
+const FINISH_CELEBRATION_HONEYCOMB_PULSES = 5;
+const FINISH_CELEBRATION_HONEYCOMB_GAP_MS = 1100;
+const FINISH_CELEBRATION_POPPER_FADE_SEC = 0.7;
+const FINISH_BEE_BURST_COUNT = 4;
+const FINISH_BEES_PER_BURST = 9;
+const FINISH_BEE_DELAY_STEP_SEC = 0.18;
+const FINISH_BEE_DUR_MIN_SEC = 5.7;
+const FINISH_BEE_DUR_SPREAD_SEC = 1.5;
+const PARTY_POP_CONFETTI_COUNT = 36;
+const PARTY_POP_STREAMER_COUNT = 16;
 
 /** Prefer English, then names that usually indicate a female voice per OS/browser lists */
 const TTS_FEMALE_NAME_PATTERNS = [
@@ -266,6 +284,30 @@ const dom = {
   appShell: document.querySelector(".app-shell"),
   finishCelebrationRoot: document.getElementById("finish-celebration-root"),
 };
+
+/** Last session bee count rendered in the header (for one-shot glow on new bees) */
+let lastRenderedSessionBeeCount = 0;
+
+let finishCelebrationCleanupTimerId = null;
+let finishCelebrationSoundIntervalId = null;
+let finishCelebrationHoneycombTimeoutIds = [];
+let finishCelebrationStageFadeTimerId = null;
+let honeycombGlowTimerId = null;
+/** Wall-clock ms until honeycomb animation ends; used to delay advancing to the next word */
+let honeycombGlowUntilMs = 0;
+let goToNextWordDeferTimerId = null;
+/** Reused so repeated correct answers do not create many AudioContexts */
+let correctDingAudioContext = null;
+
+function readStorageBool(key, whenNull) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return whenNull;
+    return raw === "1";
+  } catch (_) {
+    return whenNull;
+  }
+}
 
 function updateSelectedGradeHint(text) {
   if (!dom.selectedGradeHint) return;
@@ -495,36 +537,7 @@ function getSessionBeeCount() {
   return Math.min(BEE_PROGRESS_MAX_ICONS, Math.floor(state.score / 10));
 }
 
-/** Must match styles.css `--honeycomb-pulse-duration` (one iteration) + buffer — same base duration as bee reward glow (1.05s). */
-const HONEYCOMB_GLOW_TOTAL_MS = 1300;
-
-/** Session summary opens after this delay so bees + poppers stay visible (dialog uses top layer). */
-const FINISH_CELEBRATION_DIALOG_DELAY_MS = 9000;
-/** Remove celebration nodes after animations settle (bee flight + poppers are the long pole) */
-const FINISH_CELEBRATION_CLEANUP_MS = 12000;
-
-const POPPER_POP_ROUNDS = 5;
-const POPPER_POP_GAP_MS = 820;
-
-/** Honeycomb frame pulses during end-of-list cheer (same glow as milestones; spaced so each can play). */
-const FINISH_CELEBRATION_HONEYCOMB_PULSES = 5;
-const FINISH_CELEBRATION_HONEYCOMB_GAP_MS = 800;
-
-/** Poppers/confetti fade duration; stage fade ends when last bee dance ends */
-const FINISH_CELEBRATION_POPPER_FADE_SEC = 0.7;
-
-let finishCelebrationCleanupTimerId = null;
-let finishCelebrationSoundIntervalId = null;
-/** Timeouts for finish-cheer honeycomb pulses + final off */
-let finishCelebrationHoneycombTimeoutIds = [];
-let finishCelebrationStageFadeTimerId = null;
-
-let honeycombGlowTimerId = null;
-/** Wall-clock ms until honeycomb animation ends; used to delay advancing to the next word */
-let honeycombGlowUntilMs = 0;
-/** Pending `goToNextWord` retry after glow (see `goToNextWord`) */
-let goToNextWordDeferTimerId = null;
-
+/* Honeycomb glow & full-list finish celebration */
 function clearGoToNextWordDeferTimer() {
   if (goToNextWordDeferTimerId !== null) {
     clearTimeout(goToNextWordDeferTimerId);
@@ -671,8 +684,8 @@ function playPartyPopperPop(delaySec = 0) {
 function addPartyPopperBurst(originEl, side, density = 1) {
   const confettiColors = ["#ef4444", "#60a5fa", "#fbbf24", "#a78bfa", "#34d399", "#f472b6"];
   const streamerColors = ["#4ade80", "#fbbf24", "#38bdf8", "#c084fc", "#fb923c"];
-  const nConfetti = Math.max(8, Math.round(36 * density));
-  const nStream = Math.max(4, Math.round(16 * density));
+  const nConfetti = Math.max(8, Math.round(PARTY_POP_CONFETTI_COUNT * density));
+  const nStream = Math.max(4, Math.round(PARTY_POP_STREAMER_COUNT * density));
 
   for (let i = 0; i < nConfetti; i++) {
     const bit = document.createElement("span");
@@ -790,17 +803,17 @@ function triggerFinishCelebration() {
 
   triggerFinishCelebrationHoneycombGlows();
 
-  playFinishCelebrationBeeBuzzes(8400);
+  playFinishCelebrationBeeBuzzes(FINISH_CELEBRATION_BUZZ_MS);
 
   const beeSrc = BEE_PROGRESS_ICON_SRC;
-  const burstCount = 4;
-  const beesPerBurst = 9;
+  const burstCount = FINISH_BEE_BURST_COUNT;
+  const beesPerBurst = FINISH_BEES_PER_BURST;
   let maxBeeEndSec = 0;
   for (let b = 0; b < burstCount; b++) {
     const t = burstCount <= 1 ? 0.5 : b / (burstCount - 1);
     const cx = 12 + t * 76 + (Math.random() - 0.5) * 8;
     const cy = 16 + Math.random() * 22;
-    const delay = b * 0.18;
+    const delay = b * FINISH_BEE_DELAY_STEP_SEC;
     for (let i = 0; i < beesPerBurst; i++) {
       const wrap = document.createElement("span");
       wrap.className = "finish-bee-pop";
@@ -814,7 +827,7 @@ function triggerFinishCelebration() {
         wrap.style.setProperty(`--p${p}x`, `${Math.cos(ang) * rp}px`);
         wrap.style.setProperty(`--p${p}y`, `${Math.sin(ang) * rp}px`);
       }
-      const durSec = 5.7 + Math.random() * 1.5;
+      const durSec = FINISH_BEE_DUR_MIN_SEC + Math.random() * FINISH_BEE_DUR_SPREAD_SEC;
       wrap.style.animationDelay = `${delay}s`;
       wrap.style.animationDuration = `${durSec}s`;
       maxBeeEndSec = Math.max(maxBeeEndSec, delay + durSec);
@@ -1213,27 +1226,13 @@ function populateTtsVoiceSelect(voices) {
 
 function initGameOptions() {
   if (dom.optionAutoNext) {
-    try {
-      const stored = localStorage.getItem(AUTO_NEXT_STORAGE_KEY);
-      dom.optionAutoNext.checked = stored === null ? true : stored === "1";
-    } catch (_) {
-      dom.optionAutoNext.checked = true;
-    }
+    dom.optionAutoNext.checked = readStorageBool(AUTO_NEXT_STORAGE_KEY, true);
   }
   if (dom.optionShowBeeProgress) {
-    try {
-      const stored = localStorage.getItem(SHOW_BEE_PROGRESS_STORAGE_KEY);
-      dom.optionShowBeeProgress.checked = stored === null ? true : stored === "1";
-    } catch (_) {
-      dom.optionShowBeeProgress.checked = true;
-    }
+    dom.optionShowBeeProgress.checked = readStorageBool(SHOW_BEE_PROGRESS_STORAGE_KEY, true);
   }
   if (dom.optionShowTimer) {
-    try {
-      dom.optionShowTimer.checked = localStorage.getItem(SHOW_TIMER_STORAGE_KEY) === "1";
-    } catch (_) {
-      dom.optionShowTimer.checked = false;
-    }
+    dom.optionShowTimer.checked = readStorageBool(SHOW_TIMER_STORAGE_KEY, false);
   }
   if (dom.optionAutoNext && !dom.optionAutoNext.dataset.bound) {
     dom.optionAutoNext.dataset.bound = "1";
@@ -1332,9 +1331,6 @@ function speakText(text, rate = SPEECH_RATE_DEFAULT) {
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 }
-
-/** Reused so repeated correct answers do not create many AudioContexts */
-let correctDingAudioContext = null;
 
 /** Short soft sine “ding” on correct spell (Web Audio API, no asset file) */
 function playCorrectDing() {
