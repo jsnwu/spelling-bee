@@ -224,6 +224,8 @@ const PARTY_POP_STREAMER_COUNT = 16;
 
 /** Prefer English, then names that usually indicate a female voice per OS/browser lists */
 const TTS_FEMALE_NAME_PATTERNS = [
+  /siri.*female/i,
+  /female.*siri/i,
   /female/i,
   /woman/i,
   /samantha/i,
@@ -251,6 +253,20 @@ const TTS_FEMALE_NAME_PATTERNS = [
   /linda/i,
   /microsoft zira/i,
 ];
+
+/** Picker: Aaron (US male), Samantha (US female), UK voices — match `name` or `voiceURI` (word-boundary) */
+const TTS_PICKER_VOICE_NAME_RE = /\b(aaron|daniel|oliver|samantha)\b/i;
+
+/** UK English — Daniel, Oliver are typical `en-GB` male voices in Safari */
+const TTS_PICKER_VOICE_UK_EN_GB_RE = /\b(daniel|oliver)\b/i;
+
+/** Short labels for the voice `<select>` — avoids Chrome’s long names like “Daniel (English (United Kingdom)) …” */
+const TTS_PICKER_SLOT_DISPLAY = {
+  aaron: "Aaron",
+  daniel: "Daniel",
+  oliver: "Oliver",
+  samantha: "Samantha",
+};
 
 const dom = {
   fileInput: document.getElementById("csv-input"),
@@ -1141,26 +1157,96 @@ function normalizeVoiceLang(lang) {
   return String(lang || "").replace("_", "-").toLowerCase();
 }
 
-/** Only United States English voices */
-function isEnUsVoice(v) {
-  return normalizeVoiceLang(v.lang).startsWith("en-us");
+/** Name + URI — Safari/WebKit sometimes leave `name` sparse but put the voice id in `voiceURI` */
+function pickerVoiceIdentityLabel(v) {
+  return `${v.name || ""} ${v.voiceURI || ""}`;
 }
 
-/** Picker is limited to the Aaron and Samantha system voices (en-US) when present */
-function isAaronOrSamanthaVoice(v) {
-  const n = v.name || "";
-  return /aaron/i.test(n) || /samantha/i.test(n);
+/**
+ * English locales for the voice picker. Safari often uses `en` or omits `lang` for built-in voices.
+ * Only used together with `TTS_PICKER_VOICE_NAME_RE` — not a general “all English” filter.
+ */
+function isPickerLangUsEnglish(v) {
+  const n = normalizeVoiceLang(v.lang);
+  const id = pickerVoiceIdentityLabel(v);
+  if (n.startsWith("en-us")) return true;
+  if (n === "en") return true;
+  if (n === "") return true;
+  if (n.startsWith("en-gb") && TTS_PICKER_VOICE_UK_EN_GB_RE.test(id)) return true;
+  return false;
+}
+
+function isAllowedPickerVoiceName(v) {
+  return TTS_PICKER_VOICE_NAME_RE.test(pickerVoiceIdentityLabel(v));
+}
+
+/** One entry per name — Safari may list compact + enhanced duplicates (deduped by score). */
+function pickerCanonicalSlot(v) {
+  const id = pickerVoiceIdentityLabel(v);
+  if (/\baaron\b/i.test(id)) return "aaron";
+  if (/\bdaniel\b/i.test(id)) return "daniel";
+  if (/\boliver\b/i.test(id)) return "oliver";
+  if (/\bsamantha\b/i.test(id)) return "samantha";
+  return null;
+}
+
+function ttsVoiceOptionLangTag(v) {
+  const lang = normalizeVoiceLang(v.lang);
+  if (lang.startsWith("en-gb")) return "en-GB";
+  if (lang.startsWith("en-us")) return "en-US";
+  if (lang === "en" || lang === "") {
+    const slot = pickerCanonicalSlot(v);
+    if (slot === "daniel" || slot === "oliver") return "en-GB";
+    return "en-US";
+  }
+  return String(v.lang || "en-US").replace(/_/g, "-");
+}
+
+function ttsVoiceOptionLabel(v) {
+  const slot = pickerCanonicalSlot(v);
+  const title =
+    slot && TTS_PICKER_SLOT_DISPLAY[slot] ? TTS_PICKER_SLOT_DISPLAY[slot] : (v.name || v.voiceURI);
+  return `${title} (${ttsVoiceOptionLangTag(v)})`;
+}
+
+function pickerVoiceDedupeScore(v) {
+  const name = (v.name || "").toLowerCase();
+  let s = 0;
+  if (/enhanced|premium|neural/i.test(name)) s += 100;
+  if (/compact/i.test(name)) s -= 20;
+  return s;
 }
 
 function filterAllowedVoices(voices) {
-  return (voices || []).filter((v) => isEnUsVoice(v) && isAaronOrSamanthaVoice(v));
+  const raw = (voices || []).filter((v) => isPickerLangUsEnglish(v) && isAllowedPickerVoiceName(v));
+  const bySlot = new Map();
+  for (const v of raw) {
+    const slot = pickerCanonicalSlot(v);
+    if (!slot) continue;
+    const cur = bySlot.get(slot);
+    if (!cur) {
+      bySlot.set(slot, v);
+      continue;
+    }
+    const sv = pickerVoiceDedupeScore(v);
+    const sc = pickerVoiceDedupeScore(cur);
+    if (sv > sc) {
+      bySlot.set(slot, v);
+    } else if (sv === sc && (v.voiceURI || "").localeCompare(cur.voiceURI || "") < 0) {
+      bySlot.set(slot, v);
+    }
+  }
+  return ["aaron", "daniel", "oliver", "samantha"]
+    .map((k) => bySlot.get(k))
+    .filter(Boolean);
 }
 
 function pickDefaultFemaleVoice(voices) {
   const pool = filterAllowedVoices(voices);
   if (!pool.length) return null;
+  const label = (v) => pickerVoiceIdentityLabel(v);
   for (const re of TTS_FEMALE_NAME_PATTERNS) {
-    const hit = pool.find((v) => re.test(v.name || ""));
+    const hit = pool.find((v) => re.test(label(v)));
     if (hit) return hit;
   }
   return pool[0];
@@ -1195,14 +1281,15 @@ function populateTtsVoiceSelect(voices) {
     (a.name || "").localeCompare(b.name || "")
   );
   if (!sorted.length) {
-    sel.innerHTML = '<option value="">Aaron / Samantha (en-US) not available</option>';
+    sel.innerHTML =
+      '<option value="">Aaron / Daniel / Oliver / Samantha not found — check System Settings → Accessibility → Spoken Content</option>';
     return;
   }
   sel.innerHTML = "";
   for (const v of sorted) {
     const opt = document.createElement("option");
     opt.value = v.voiceURI;
-    opt.textContent = `${v.name} (${v.lang})`;
+    opt.textContent = ttsVoiceOptionLabel(v);
     sel.appendChild(opt);
   }
   let saved = null;
@@ -1311,6 +1398,8 @@ function initTtsVoices() {
   };
   refresh();
   window.speechSynthesis.addEventListener("voiceschanged", refresh);
+  /* Safari often fills the voice list shortly after the first getVoices() (empty or partial) */
+  window.setTimeout(refresh, 200);
 }
 
 function speakText(text, rate = SPEECH_RATE_DEFAULT) {
