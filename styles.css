@@ -1157,8 +1157,9 @@ body {
 }
 
 /* ── Full list cleared: party poppers + bees + SFX (triggerFinishCelebration in app.js) ── */
+/* Absolute to .app-shell (not the viewport) so bees/poppers stay over the honeycomb frame on ultra-wide screens */
 .finish-celebration-root {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 9990;
   pointer-events: none;
