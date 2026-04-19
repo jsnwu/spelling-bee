@@ -44,14 +44,65 @@
                     Choose a built-in list and load it instantly.
                   </p>
                   <div class="grade-row">
-                    <label class="visually-hidden" for="grade-select">Grade</label>
-                    <select id="grade-select" class="grade-select" aria-label="Select grade">
-                      <option value="1st">1st grade</option>
-                      <option value="2nd">2nd grade</option>
-                      <option value="3rd" selected>3rd grade</option>
-                      <option value="4th">4th grade</option>
-                      <option value="5th">5th grade</option>
-                    </select>
+                    <label class="visually-hidden" for="grade-select-button">Grade</label>
+                    <div class="grade-combobox">
+                      <button
+                        type="button"
+                        id="grade-select-button"
+                        class="grade-select grade-select--custom"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-controls="grade-select-dropdown"
+                        aria-label="Select grade"
+                      >
+                        <span id="grade-select-button-label">3rd grade</span>
+                      </button>
+                      <ul
+                        id="grade-select-dropdown"
+                        class="grade-select-dropdown"
+                        role="listbox"
+                        aria-labelledby="grade-select-button"
+                        hidden
+                      >
+                        <li role="option" data-value="1st" class="grade-select-option">
+                          <span class="grade-select-option-check" aria-hidden="true"></span>
+                          <span class="grade-select-option-label">
+                            <span class="grade-select-option-ordinal">1st</span><span class="grade-select-option-grade">grade</span>
+                          </span>
+                        </li>
+                        <li role="option" data-value="2nd" class="grade-select-option">
+                          <span class="grade-select-option-check" aria-hidden="true"></span>
+                          <span class="grade-select-option-label">
+                            <span class="grade-select-option-ordinal">2nd</span><span class="grade-select-option-grade">grade</span>
+                          </span>
+                        </li>
+                        <li role="option" data-value="3rd" class="grade-select-option">
+                          <span class="grade-select-option-check" aria-hidden="true"></span>
+                          <span class="grade-select-option-label">
+                            <span class="grade-select-option-ordinal">3rd</span><span class="grade-select-option-grade">grade</span>
+                          </span>
+                        </li>
+                        <li role="option" data-value="4th" class="grade-select-option">
+                          <span class="grade-select-option-check" aria-hidden="true"></span>
+                          <span class="grade-select-option-label">
+                            <span class="grade-select-option-ordinal">4th</span><span class="grade-select-option-grade">grade</span>
+                          </span>
+                        </li>
+                        <li role="option" data-value="5th" class="grade-select-option">
+                          <span class="grade-select-option-check" aria-hidden="true"></span>
+                          <span class="grade-select-option-label">
+                            <span class="grade-select-option-ordinal">5th</span><span class="grade-select-option-grade">grade</span>
+                          </span>
+                        </li>
+                      </ul>
+                      <select id="grade-select" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                        <option value="1st">1st grade</option>
+                        <option value="2nd">2nd grade</option>
+                        <option value="3rd" selected>3rd grade</option>
+                        <option value="4th">4th grade</option>
+                        <option value="5th">5th grade</option>
+                      </select>
+                    </div>
                   </div>
                 </section>
 
@@ -62,11 +113,13 @@
                     <strong>meaning</strong>). Optional: <strong>definition</strong>, <strong>pronounce</strong>.
                   </p>
                   <div class="file-input-row">
-                    <label class="file-label">
-                      <input type="file" id="csv-input" accept=".csv" />
-                      <span>Select CSV file</span>
-                    </label>
-                    <span id="file-name" class="file-name">No file selected</span>
+                    <div class="file-input-row-main">
+                      <label class="file-label">
+                        <input type="file" id="csv-input" accept=".csv" />
+                        <span>Select CSV file</span>
+                      </label>
+                      <span id="file-name" class="file-name">No file selected</span>
+                    </div>
                     <button id="download-csv" class="ghost-button" type="button">Download CSV</button>
                   </div>
                   <details class="csv-example">
@@ -185,6 +238,8 @@ Yacht,"The yacht sailed across the ocean.",YAHT,"A large pleasure boat"
           <p id="feedback" class="feedback-text"></p>
         </section>
       </main>
+
+      <div id="finish-celebration-root" class="finish-celebration-root" aria-hidden="true"></div>
 
       <dialog id="session-summary-dialog" class="session-summary-dialog" aria-labelledby="session-summary-title">
         <form method="dialog" class="session-summary-form">

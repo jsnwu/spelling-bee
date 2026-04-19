@@ -59,13 +59,8 @@ body {
 }
 
 /*
-  Honeycomb achievement glow — tune here:
-  • Shape / brightness of ONE pulse: @keyframes honeycomb-glow-shine (percent stops).
-  • How long each pulse lasts + gap between the two pulses: .app-shell--honeycomb-glow::before
-    – animation-iteration-count: 2 runs the keyframes twice.
-    – Time between glow peaks ≈ one full animation-duration (first peak at ~35%, second peak ~35% into the 2nd run).
-    – To make ONLY the gap slightly shorter: lower --honeycomb-pulse-duration a bit (e.g. 2.35s or 2.2s). That also
-      shortens each pulse slightly. Keep app.js honeycombGlowTimerId timeout in sync (~2 × duration + 0.3s).
+  Honeycomb achievement glow — same duration / ease / peak beat as .game-header-bee-reward-glow (1.05s, ease-out, peak 45%).
+  Keep app.js HONEYCOMB_GLOW_TOTAL_MS in sync (~duration + ~0.25s buffer).
 */
 @keyframes honeycomb-glow-shine {
   0% {
@@ -73,15 +68,10 @@ body {
     filter: saturate(1.25) contrast(1.22) brightness(1);
     box-shadow: inset 0 0 0 transparent;
   }
-  35% {
+  45% {
     opacity: 0.82;
     filter: saturate(1.55) contrast(1.12) brightness(1.22);
     box-shadow: inset 0 0 100px rgba(251, 191, 36, 0.45);
-  }
-  70% {
-    opacity: 0.72;
-    filter: saturate(1.4) contrast(1.15) brightness(1.12);
-    box-shadow: inset 0 0 60px rgba(253, 224, 71, 0.28);
   }
   100% {
     opacity: 0.62;
@@ -91,21 +81,20 @@ body {
 }
 
 .app-shell.app-shell--honeycomb-glow::before {
-  /* Full pulse length per glow. Slightly shorter gap between the two peaks: try 2.35s (then set app.js timeout ~5000). */
-  --honeycomb-pulse-duration: 2.4s;
+  --honeycomb-pulse-duration: 1.05s;
   animation-name: honeycomb-glow-shine;
   animation-duration: var(--honeycomb-pulse-duration);
   animation-timing-function: ease-out;
-  animation-iteration-count: 2;
+  animation-iteration-count: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .app-shell.app-shell--honeycomb-glow::before {
-    --honeycomb-pulse-duration: 0.65s;
+    --honeycomb-pulse-duration: 0.5s;
     animation-name: honeycomb-glow-shine-reduced;
     animation-duration: var(--honeycomb-pulse-duration);
     animation-timing-function: ease-out;
-    animation-iteration-count: 2;
+    animation-iteration-count: 1;
   }
 
   @keyframes honeycomb-glow-shine-reduced {
@@ -196,6 +185,7 @@ body {
 /* Step 1: collapsed by default so setup copy is optional */
 .config-details {
   margin: 0;
+  overflow: visible;
 }
 
 .config-details-summary {
@@ -254,6 +244,7 @@ body {
   margin-top: 12px;
   padding-top: 2px;
   border-top: 1px solid rgba(55, 65, 81, 0.55);
+  overflow: visible;
 }
 
 .helper-text {
@@ -264,14 +255,23 @@ body {
 
 .file-input-row {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.file-input-row-main {
+  display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 12px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 #download-csv {
   white-space: nowrap;
+  align-self: flex-start;
 }
 
 .load-words-grid {
@@ -286,6 +286,13 @@ body {
   border: 1px solid rgba(55, 65, 81, 0.8);
   background: rgba(15, 23, 42, 0.7);
   padding: 12px 12px 14px;
+  overflow: visible;
+}
+
+/* Stack above following .app-main sections while grade list is open (siblings share z-index: 2) */
+.config-card.config-card--grade-dropdown-open {
+  position: relative;
+  z-index: 100;
 }
 
 .panel-title {
@@ -311,6 +318,99 @@ body {
   color: #e5e7eb;
   font-size: 0.95rem;
   min-width: 10.5rem;
+}
+
+/* Custom grade combobox — native <option> lists can’t be centered on macOS; button + list are styled */
+.grade-combobox {
+  position: relative;
+  display: inline-block;
+}
+
+.grade-select--custom {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 10.5rem;
+  height: 2.375rem;
+  min-height: 2.375rem;
+  padding: 0 14px;
+  line-height: calc(2.375rem - 2px);
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.grade-select--custom:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.75);
+  outline-offset: 2px;
+}
+
+.grade-select-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 200;
+  margin: 0;
+  padding: 3px 0;
+  list-style: none;
+  border-radius: 12px;
+  border: 1px solid rgba(75, 85, 99, 0.95);
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.grade-select-option {
+  margin: 0;
+  padding: 5px 12px 5px 8px;
+  text-align: left;
+  cursor: pointer;
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.12rem;
+}
+
+.grade-select-option-check {
+  flex: 0 0 1.125rem;
+  width: 1.125rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 0.8rem;
+  line-height: 1;
+  opacity: 0.95;
+}
+
+.grade-select-option--selected .grade-select-option-check::before {
+  content: "✓";
+}
+
+.grade-select-option-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  min-width: 0;
+}
+
+/* Ordinals share one column so “grade” lines up; checkmark column is separate */
+.grade-select-option-ordinal {
+  min-width: 2.65em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-select-option:hover,
+.grade-select-option:focus-visible {
+  background: rgba(56, 189, 248, 0.12);
+  outline: none;
+}
+
+.grade-select-option--selected {
+  font-weight: 600;
 }
 
 .subtle-status {
@@ -722,6 +822,45 @@ body {
   flex-shrink: 0;
 }
 
+@keyframes game-header-bee-reward-glow {
+  0% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: scale(1);
+  }
+  45% {
+    filter:
+      drop-shadow(0 0 8px rgba(253, 224, 71, 0.95))
+      drop-shadow(0 0 18px rgba(251, 191, 36, 0.7))
+      drop-shadow(0 0 3px rgba(255, 255, 255, 0.55));
+    transform: scale(1.22);
+  }
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: scale(1);
+  }
+}
+
+.game-header-bee-img--reward-enter {
+  animation: game-header-bee-reward-glow 1.05s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes game-header-bee-reward-glow-soft {
+    0%,
+    100% {
+      filter: none;
+      transform: none;
+    }
+    50% {
+      filter: brightness(1.2);
+    }
+  }
+
+  .game-header-bee-img--reward-enter {
+    animation: game-header-bee-reward-glow-soft 0.5s ease-out forwards;
+  }
+}
+
 .game-header-metrics {
   display: flex;
   flex-wrap: wrap;
@@ -1015,6 +1154,269 @@ body {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   border: 0;
+}
+
+/* ── Full list cleared: party poppers + bees + SFX (triggerFinishCelebration in app.js) ── */
+.finish-celebration-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+}
+
+.finish-celebration-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+}
+
+/* Fade poppers/confetti out so opacity hits 0 when the last bee dance ends (see triggerFinishCelebration) */
+.finish-celebration-stage.finish-celebration-stage--fade {
+  opacity: 0;
+  transition: opacity var(--finish-popper-fade-sec, 0.7s) ease-out;
+}
+
+.finish-popper {
+  position: absolute;
+  /* Higher on the screen so mouths sit nearer the bee swarm (bees use ~top 16–38%) */
+  bottom: max(140px, 18vh);
+  width: 112px;
+  height: 132px;
+  pointer-events: none;
+}
+
+/* Tip down, mouth up — ±30° tilt; centers 5in apart (2.5in each side of viewport center) */
+.finish-popper--left {
+  left: max(3rem, calc(50% - 2.5in));
+  transform: translateX(-50%) rotate(30deg);
+  transform-origin: 50% 100%;
+}
+
+.finish-popper--right {
+  left: min(calc(100% - 3rem), calc(50% + 2.5in));
+  right: auto;
+  transform: translateX(-50%) rotate(-30deg);
+  transform-origin: 50% 100%;
+}
+
+@keyframes finish-popper-pop-left {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(30deg) scale(1);
+  }
+  40% {
+    transform: translateX(-50%) rotate(30deg) scale(1.14);
+  }
+}
+
+@keyframes finish-popper-pop-right {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(-30deg) scale(1);
+  }
+  40% {
+    transform: translateX(-50%) rotate(-30deg) scale(1.14);
+  }
+}
+
+.finish-popper--left.finish-popper--pop {
+  animation: finish-popper-pop-left 0.34s ease;
+}
+
+.finish-popper--right.finish-popper--pop {
+  animation: finish-popper-pop-right 0.34s ease;
+}
+
+.finish-popper-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.finish-popper-cap {
+  width: 54px;
+  height: 13px;
+  border-radius: 2px 2px 5px 5px;
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.1);
+  order: 0;
+}
+
+.finish-popper-cap--warm {
+  background: linear-gradient(180deg, #f97316 0%, #ea580c 100%);
+}
+
+.finish-popper-cap--cool {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+/* Wide opening at top (mouth), narrow tip at bottom — tip points down */
+.finish-popper-cone {
+  width: 72px;
+  height: 86px;
+  margin-top: -1px;
+  order: 1;
+  flex-shrink: 0;
+  clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
+  box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+
+.finish-popper-cone--warm {
+  background: repeating-linear-gradient(-62deg, #fbbf24 0px, #fbbf24 9px, #fdba74 9px, #fdba74 18px);
+}
+
+.finish-popper-cone--cool {
+  background: repeating-linear-gradient(-62deg, #bfdbfe 0px, #bfdbfe 8px, #60a5fa 8px, #60a5fa 16px);
+}
+
+.finish-popper-string {
+  order: 2;
+  align-self: center;
+  width: 3px;
+  height: 22px;
+  margin-top: -2px;
+  border-radius: 2px;
+}
+
+.finish-popper-string--purple {
+  background: linear-gradient(180deg, #a78bfa, #7c3aed);
+}
+
+.finish-popper-string--red {
+  background: linear-gradient(180deg, #fb7185, #dc2626);
+}
+
+/* Confetti originates at the wide mouth (top of cone, below cap) */
+.finish-popper-burst {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 13px;
+  bottom: auto;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  overflow: visible;
+}
+
+@keyframes finish-confetti-shoot {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.finish-confetti-bit {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  margin-left: -2px;
+  margin-bottom: 0;
+  border-radius: 1px;
+  background: var(--c);
+  animation: finish-confetti-shoot ease-out forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes finish-streamer-shoot {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scaleY(0.25);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--curl, 18deg)) scaleY(1);
+    opacity: 0;
+  }
+}
+
+.finish-streamer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 5px;
+  height: 96px;
+  margin-left: -2px;
+  border-radius: 50% 50% 45% 55% / 40% 40% 60% 60%;
+  transform-origin: bottom center;
+  background: linear-gradient(180deg, var(--stream-c) 0%, transparent 92%);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.12);
+  animation: finish-streamer-shoot ease-out forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes finish-bee-fly-around {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0) scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  5% {
+    transform: translate(-50%, -50%) translate(0, 0) scale(1.12) rotate(-10deg);
+    opacity: 1;
+  }
+  11% {
+    transform: translate(-50%, -50%) translate(0, 0) scale(1) rotate(14deg);
+    opacity: 1;
+  }
+  26% {
+    transform: translate(-50%, -50%) translate(var(--p1x), var(--p1y)) scale(1) rotate(-20deg);
+    opacity: 1;
+  }
+  44% {
+    transform: translate(-50%, -50%) translate(var(--p2x), var(--p2y)) scale(1.05) rotate(24deg);
+    opacity: 1;
+  }
+  62% {
+    transform: translate(-50%, -50%) translate(var(--p3x), var(--p3y)) scale(1) rotate(-18deg);
+    opacity: 1;
+  }
+  80% {
+    transform: translate(-50%, -50%) translate(var(--p4x), var(--p4y)) scale(0.92) rotate(18deg);
+    opacity: 0.88;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--p4x), var(--p4y)) scale(0.35) rotate(22deg);
+    opacity: 0;
+  }
+}
+
+.finish-bee-pop {
+  position: absolute;
+  left: var(--cx);
+  top: var(--cy);
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  /* duration overridden by inline style from JS (per-bee variation); base ≈ 2× original dance length */
+  animation: finish-bee-fly-around 6.2s cubic-bezier(0.33, 0.72, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.finish-bee-pop-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finish-celebration-root {
+    display: none !important;
+  }
 }
 
 @media (max-width: 640px) {

@@ -189,6 +189,9 @@ const IDLE_PAUSE_AFTER_MS = 10_000;
 const BEE_PROGRESS_ICON_SRC = "assets/bee-icon.png";
 const BEE_PROGRESS_MAX_ICONS = 12;
 
+/** Last session bee count rendered in the header (for one-shot glow on new bees) */
+let lastRenderedSessionBeeCount = 0;
+
 /** Default TTS speed (auto-speak after each prompt) */
 const SPEECH_RATE_DEFAULT = 0.9;
 /** Slower playback when the user taps the speaker button */
@@ -261,6 +264,7 @@ const dom = {
   optionShowBeeProgress: document.getElementById("option-show-bee-progress"),
   optionShowTimer: document.getElementById("option-show-timer"),
   appShell: document.querySelector(".app-shell"),
+  finishCelebrationRoot: document.getElementById("finish-celebration-root"),
 };
 
 function updateSelectedGradeHint(text) {
@@ -336,7 +340,7 @@ function formatDurationSeconds(totalSec) {
  * Dev/testing only — query params are not persisted unless you submit answers.
  * Examples:
  *   ?debugLifetime=19 — bump lifetime bees only (header); not used for honeycomb glow
- *   ?debugScore=19 — session score after Start; next correct → 20 in this game → honeycomb glow (if bee progress on)
+ *   ?debugScore=9 — session score after Start; next correct → 10 in this game → honeycomb glow (if bee progress on)
  *   ?debugScore=5&debugAttempts=5 — session score after Start (attempts defaults to score if omitted)
  */
 function readDebugQueryParam(name) {
@@ -491,8 +495,29 @@ function getSessionBeeCount() {
   return Math.min(BEE_PROGRESS_MAX_ICONS, Math.floor(state.score / 10));
 }
 
-/** Must match styles.css `--honeycomb-pulse-duration` × 2 iterations + buffer (see setTimeout below). */
-const HONEYCOMB_GLOW_TOTAL_MS = 5200;
+/** Must match styles.css `--honeycomb-pulse-duration` (one iteration) + buffer — same base duration as bee reward glow (1.05s). */
+const HONEYCOMB_GLOW_TOTAL_MS = 1300;
+
+/** Session summary opens after this delay so bees + poppers stay visible (dialog uses top layer). */
+const FINISH_CELEBRATION_DIALOG_DELAY_MS = 9000;
+/** Remove celebration nodes after animations settle (bee flight + poppers are the long pole) */
+const FINISH_CELEBRATION_CLEANUP_MS = 12000;
+
+const POPPER_POP_ROUNDS = 5;
+const POPPER_POP_GAP_MS = 820;
+
+/** Honeycomb frame pulses during end-of-list cheer (same glow as milestones; spaced so each can play). */
+const FINISH_CELEBRATION_HONEYCOMB_PULSES = 5;
+const FINISH_CELEBRATION_HONEYCOMB_GAP_MS = 800;
+
+/** Poppers/confetti fade duration; stage fade ends when last bee dance ends */
+const FINISH_CELEBRATION_POPPER_FADE_SEC = 0.7;
+
+let finishCelebrationCleanupTimerId = null;
+let finishCelebrationSoundIntervalId = null;
+/** Timeouts for finish-cheer honeycomb pulses + final off */
+let finishCelebrationHoneycombTimeoutIds = [];
+let finishCelebrationStageFadeTimerId = null;
 
 let honeycombGlowTimerId = null;
 /** Wall-clock ms until honeycomb animation ends; used to delay advancing to the next word */
@@ -507,11 +532,322 @@ function clearGoToNextWordDeferTimer() {
   }
 }
 
-/** Short honeycomb double-pulse when this game’s score hits 20, 40, … (session only; not lifetime bees). */
+function clearFinishCelebrationHoneycombTimers() {
+  for (const id of finishCelebrationHoneycombTimeoutIds) {
+    clearTimeout(id);
+  }
+  finishCelebrationHoneycombTimeoutIds = [];
+  const shell = dom.appShell;
+  if (shell) {
+    shell.classList.remove("app-shell--honeycomb-glow");
+  }
+  honeycombGlowUntilMs = 0;
+}
+
+function clearFinishCelebrationStageFadeTimer() {
+  if (finishCelebrationStageFadeTimerId !== null) {
+    clearTimeout(finishCelebrationStageFadeTimerId);
+    finishCelebrationStageFadeTimerId = null;
+  }
+}
+
+function clearFinishCelebrationCleanupTimer() {
+  if (finishCelebrationCleanupTimerId !== null) {
+    clearTimeout(finishCelebrationCleanupTimerId);
+    finishCelebrationCleanupTimerId = null;
+  }
+  stopFinishCelebrationSounds();
+  clearFinishCelebrationHoneycombTimers();
+  clearFinishCelebrationStageFadeTimer();
+}
+
+/** Several honeycomb shines during the full-list celebration (poppers / bees). */
+function triggerFinishCelebrationHoneycombGlows() {
+  const shell = dom.appShell;
+  if (!shell) return;
+  if (honeycombGlowTimerId !== null) {
+    clearTimeout(honeycombGlowTimerId);
+    honeycombGlowTimerId = null;
+  }
+  clearFinishCelebrationHoneycombTimers();
+
+  const pulses = FINISH_CELEBRATION_HONEYCOMB_PULSES;
+  const gap = FINISH_CELEBRATION_HONEYCOMB_GAP_MS;
+
+  for (let i = 0; i < pulses; i++) {
+    const id = window.setTimeout(() => {
+      shell.classList.remove("app-shell--honeycomb-glow");
+      void shell.offsetWidth;
+      shell.classList.add("app-shell--honeycomb-glow");
+    }, i * gap);
+    finishCelebrationHoneycombTimeoutIds.push(id);
+  }
+
+  const finalId = window.setTimeout(() => {
+    shell.classList.remove("app-shell--honeycomb-glow");
+    honeycombGlowUntilMs = 0;
+  }, (pulses - 1) * gap + HONEYCOMB_GLOW_TOTAL_MS);
+  finishCelebrationHoneycombTimeoutIds.push(finalId);
+}
+
+function stopFinishCelebrationSounds() {
+  if (finishCelebrationSoundIntervalId !== null) {
+    clearInterval(finishCelebrationSoundIntervalId);
+    finishCelebrationSoundIntervalId = null;
+  }
+}
+
+/** Short wing-buzz chirps while finish-celebration bees are on screen (Web Audio; reuses ding context). */
+function playFinishCelebrationBeeBuzzes(durationMs) {
+  stopFinishCelebrationSounds();
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!correctDingAudioContext || correctDingAudioContext.state === "closed") {
+      correctDingAudioContext = new AC();
+    }
+    const ctx = correctDingAudioContext;
+    if (ctx.state === "suspended" && ctx.resume) {
+      void ctx.resume();
+    }
+    const endAt = Date.now() + durationMs;
+    const chirp = () => {
+      if (Date.now() >= endAt) {
+        stopFinishCelebrationSounds();
+        return;
+      }
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      osc.type = "triangle";
+      const f0 = 155 + Math.random() * 70;
+      osc.frequency.setValueAtTime(f0, now);
+      osc.frequency.exponentialRampToValueAtTime(f0 * 0.72, now + 0.085);
+      const g = ctx.createGain();
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.038 + Math.random() * 0.028, now + 0.018);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      osc.connect(g);
+      osc.start(now);
+      osc.stop(now + 0.13);
+    };
+    chirp();
+    finishCelebrationSoundIntervalId = window.setInterval(chirp, 138);
+  } catch (_) {
+    /* no-op */
+  }
+}
+
+/** Soft “pop” when a party popper fires (pairs with visual burst). */
+function playPartyPopperPop(delaySec = 0) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!correctDingAudioContext || correctDingAudioContext.state === "closed") {
+      correctDingAudioContext = new AC();
+    }
+    const ctx = correctDingAudioContext;
+    if (ctx.state === "suspended" && ctx.resume) {
+      void ctx.resume();
+    }
+    const now = ctx.currentTime + delaySec;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.06);
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.07, now + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+    osc.connect(g);
+    osc.start(now);
+    osc.stop(now + 0.1);
+  } catch (_) {
+    /* no-op */
+  }
+}
+
+function addPartyPopperBurst(originEl, side, density = 1) {
+  const confettiColors = ["#ef4444", "#60a5fa", "#fbbf24", "#a78bfa", "#34d399", "#f472b6"];
+  const streamerColors = ["#4ade80", "#fbbf24", "#38bdf8", "#c084fc", "#fb923c"];
+  const nConfetti = Math.max(8, Math.round(36 * density));
+  const nStream = Math.max(4, Math.round(16 * density));
+
+  for (let i = 0; i < nConfetti; i++) {
+    const bit = document.createElement("span");
+    bit.className = "finish-confetti-bit";
+    const w = 4 + Math.random() * 5;
+    const h = 5 + Math.random() * 9;
+    bit.style.width = `${w}px`;
+    bit.style.height = `${h}px`;
+    bit.style.setProperty("--c", confettiColors[i % confettiColors.length]);
+    let dx;
+    let dy;
+    if (side === "left") {
+      dx = 100 + Math.random() * 320;
+      dy = -(110 + Math.random() * 300);
+    } else {
+      dx = -(100 + Math.random() * 320);
+      dy = -(110 + Math.random() * 300);
+    }
+    dx += (Math.random() - 0.5) * 80;
+    dy += (Math.random() - 0.5) * 60;
+    bit.style.setProperty("--dx", `${dx}px`);
+    bit.style.setProperty("--dy", `${dy}px`);
+    bit.style.animationDelay = `${Math.random() * 0.08}s`;
+    bit.style.animationDuration = `${0.95 + Math.random() * 0.45}s`;
+    originEl.appendChild(bit);
+  }
+
+  for (let i = 0; i < nStream; i++) {
+    const rib = document.createElement("span");
+    rib.className = "finish-streamer";
+    rib.style.setProperty("--stream-c", streamerColors[i % streamerColors.length]);
+    let dx;
+    let dy;
+    if (side === "left") {
+      dx = 120 + Math.random() * 340;
+      dy = -(130 + Math.random() * 280);
+    } else {
+      dx = -(120 + Math.random() * 340);
+      dy = -(130 + Math.random() * 280);
+    }
+    rib.style.setProperty("--dx", `${dx}px`);
+    rib.style.setProperty("--dy", `${dy}px`);
+    rib.style.setProperty("--curl", `${-25 + Math.random() * 50}deg`);
+    rib.style.animationDelay = `${Math.random() * 0.1}s`;
+    rib.style.animationDuration = `${1.15 + Math.random() * 0.5}s`;
+    originEl.appendChild(rib);
+  }
+}
+
+function schedulePartyPopperPops(burstL, burstR, leftPopEl, rightPopEl) {
+  for (let r = 0; r < POPPER_POP_ROUNDS; r++) {
+    const base = r * POPPER_POP_GAP_MS;
+    const density = r === 0 ? 1 : 0.72;
+    window.setTimeout(() => {
+      if (burstL) {
+        addPartyPopperBurst(burstL, "left", density);
+      }
+      playPartyPopperPop(0);
+      leftPopEl.classList.add("finish-popper--pop");
+      window.setTimeout(() => leftPopEl.classList.remove("finish-popper--pop"), 340);
+    }, base);
+    window.setTimeout(() => {
+      if (burstR) {
+        addPartyPopperBurst(burstR, "right", density);
+      }
+      playPartyPopperPop(0);
+      rightPopEl.classList.add("finish-popper--pop");
+      window.setTimeout(() => rightPopEl.classList.remove("finish-popper--pop"), 340);
+    }, base + 170);
+  }
+}
+
+/**
+ * Party poppers (confetti + streamers) + bees flying + buzz + pop SFX when the full word list is cleared.
+ * Skipped when prefers-reduced-motion (caller opens the summary dialog immediately).
+ */
+function triggerFinishCelebration() {
+  const root = dom.finishCelebrationRoot;
+  if (!root) return;
+  clearFinishCelebrationCleanupTimer();
+  root.innerHTML = "";
+  root.setAttribute("aria-hidden", "true");
+
+  const stage = document.createElement("div");
+  stage.className = "finish-celebration-stage";
+  stage.style.setProperty("--finish-popper-fade-sec", `${FINISH_CELEBRATION_POPPER_FADE_SEC}s`);
+
+  const leftPop = document.createElement("div");
+  leftPop.className = "finish-popper finish-popper--left";
+  leftPop.setAttribute("aria-hidden", "true");
+  leftPop.innerHTML = `<div class="finish-popper-body">
+    <div class="finish-popper-cap finish-popper-cap--warm"></div>
+    <div class="finish-popper-cone finish-popper-cone--warm"></div>
+    <span class="finish-popper-string finish-popper-string--purple"></span>
+  </div><div class="finish-popper-burst"></div>`;
+
+  const rightPop = document.createElement("div");
+  rightPop.className = "finish-popper finish-popper--right";
+  rightPop.setAttribute("aria-hidden", "true");
+  rightPop.innerHTML = `<div class="finish-popper-body">
+    <div class="finish-popper-cap finish-popper-cap--cool"></div>
+    <div class="finish-popper-cone finish-popper-cone--cool"></div>
+    <span class="finish-popper-string finish-popper-string--red"></span>
+  </div><div class="finish-popper-burst"></div>`;
+
+  stage.appendChild(leftPop);
+  stage.appendChild(rightPop);
+  root.appendChild(stage);
+
+  const burstL = leftPop.querySelector(".finish-popper-burst");
+  const burstR = rightPop.querySelector(".finish-popper-burst");
+  if (burstL || burstR) {
+    schedulePartyPopperPops(burstL, burstR, leftPop, rightPop);
+  }
+
+  triggerFinishCelebrationHoneycombGlows();
+
+  playFinishCelebrationBeeBuzzes(8400);
+
+  const beeSrc = BEE_PROGRESS_ICON_SRC;
+  const burstCount = 4;
+  const beesPerBurst = 9;
+  let maxBeeEndSec = 0;
+  for (let b = 0; b < burstCount; b++) {
+    const t = burstCount <= 1 ? 0.5 : b / (burstCount - 1);
+    const cx = 12 + t * 76 + (Math.random() - 0.5) * 8;
+    const cy = 16 + Math.random() * 22;
+    const delay = b * 0.18;
+    for (let i = 0; i < beesPerBurst; i++) {
+      const wrap = document.createElement("span");
+      wrap.className = "finish-bee-pop";
+      wrap.style.setProperty("--cx", `${cx}%`);
+      wrap.style.setProperty("--cy", `${cy}%`);
+      const base = Math.random() * Math.PI * 2 + (i / beesPerBurst) * 0.4;
+      const r0 = 42 + Math.random() * 68;
+      for (let p = 1; p <= 4; p++) {
+        const ang = base + p * 0.95 + (Math.random() - 0.5) * 0.55;
+        const rp = r0 * (0.5 + Math.random() * 0.55);
+        wrap.style.setProperty(`--p${p}x`, `${Math.cos(ang) * rp}px`);
+        wrap.style.setProperty(`--p${p}y`, `${Math.sin(ang) * rp}px`);
+      }
+      const durSec = 5.7 + Math.random() * 1.5;
+      wrap.style.animationDelay = `${delay}s`;
+      wrap.style.animationDuration = `${durSec}s`;
+      maxBeeEndSec = Math.max(maxBeeEndSec, delay + durSec);
+      const img = document.createElement("img");
+      img.src = beeSrc;
+      img.alt = "";
+      img.className = "finish-bee-pop-img";
+      img.decoding = "async";
+      wrap.appendChild(img);
+      root.appendChild(wrap);
+    }
+  }
+
+  const fadeStartMs = Math.max(0, (maxBeeEndSec - FINISH_CELEBRATION_POPPER_FADE_SEC) * 1000);
+  finishCelebrationStageFadeTimerId = window.setTimeout(() => {
+    stage.classList.add("finish-celebration-stage--fade");
+    finishCelebrationStageFadeTimerId = null;
+  }, fadeStartMs);
+
+  finishCelebrationCleanupTimerId = window.setTimeout(() => {
+    clearFinishCelebrationStageFadeTimer();
+    root.innerHTML = "";
+    stopFinishCelebrationSounds();
+    clearFinishCelebrationHoneycombTimers();
+    finishCelebrationCleanupTimerId = null;
+  }, FINISH_CELEBRATION_CLEANUP_MS);
+}
+
+/** One honeycomb pulse when session score hits each bee milestone (10, 20, … — same cadence as header bees). */
 function maybeTriggerHoneycombGlowForBeeMilestone() {
   if (!state.roundStarted || !isShowBeeProgressEnabled()) return;
   const s = state.score;
-  if (s < 20 || s % 20 !== 0) return;
+  if (s <= 0 || s % 10 !== 0) return;
   const shell = dom.appShell;
   if (!shell) return;
   shell.classList.remove("app-shell--honeycomb-glow");
@@ -537,6 +873,7 @@ function updateProgressBees() {
     wrap.hidden = true;
     wrap.setAttribute("aria-hidden", "true");
     wrap.setAttribute("aria-label", "Bee progress hidden");
+    lastRenderedSessionBeeCount = 0;
     return;
   }
   wrap.hidden = false;
@@ -547,14 +884,19 @@ function updateProgressBees() {
   }
   wrap.removeAttribute("aria-hidden");
   const n = getSessionBeeCount();
+  const prevBeeCount = lastRenderedSessionBeeCount;
   for (let i = 0; i < n; i++) {
     const img = document.createElement("img");
     img.src = BEE_PROGRESS_ICON_SRC;
     img.alt = "";
     img.className = "game-header-bee-img";
+    if (n > prevBeeCount && i >= prevBeeCount) {
+      img.classList.add("game-header-bee-img--reward-enter");
+    }
     img.decoding = "async";
     wrap.appendChild(img);
   }
+  lastRenderedSessionBeeCount = n;
   wrap.setAttribute(
     "aria-label",
     n === 0
@@ -1324,7 +1666,16 @@ function goToNextWord() {
     dom.submitAnswer.setAttribute("aria-label", "Submit spelling");
     dom.nextWord.disabled = true;
     resetShowHintButton();
-    openSessionSummaryDialog(elapsedMs);
+    const reduceMotion =
+      typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion || !dom.finishCelebrationRoot) {
+      openSessionSummaryDialog(elapsedMs);
+    } else {
+      triggerFinishCelebration();
+      window.setTimeout(() => {
+        openSessionSummaryDialog(elapsedMs);
+      }, FINISH_CELEBRATION_DIALOG_DELAY_MS);
+    }
     syncGameChrome();
   }
 }
@@ -1363,6 +1714,74 @@ dom.fileInput.addEventListener("change", (e) => {
 
   reader.readAsText(file);
 });
+
+function syncGradeComboboxFromSelect() {
+  const label = document.getElementById("grade-select-button-label");
+  const list = document.getElementById("grade-select-dropdown");
+  const sel = dom.gradeSelect;
+  if (!label || !list || !sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  label.textContent = opt ? opt.textContent.trim() : String(sel.value);
+  list.querySelectorAll(".grade-select-option").forEach((li) => {
+    const v = li.getAttribute("data-value");
+    const selected = v === sel.value;
+    li.classList.toggle("grade-select-option--selected", selected);
+    li.setAttribute("aria-selected", selected ? "true" : "false");
+  });
+}
+
+function initGradeCombobox() {
+  const btn = document.getElementById("grade-select-button");
+  const list = document.getElementById("grade-select-dropdown");
+  const sel = dom.gradeSelect;
+  if (!btn || !list || !sel || btn.dataset.bound) return;
+  btn.dataset.bound = "1";
+  const sectionCard = btn.closest("section.card");
+
+  function close() {
+    list.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    sectionCard?.classList.remove("config-card--grade-dropdown-open");
+  }
+
+  function open() {
+    list.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    sectionCard?.classList.add("config-card--grade-dropdown-open");
+    syncGradeComboboxFromSelect();
+  }
+
+  function toggle() {
+    if (list.hidden) open();
+    else close();
+  }
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggle();
+  });
+
+  list.addEventListener("click", (e) => {
+    const li = e.target.closest(".grade-select-option");
+    if (!li || !list.contains(li)) return;
+    e.stopPropagation();
+    const v = li.getAttribute("data-value");
+    if (!v) return;
+    sel.value = v;
+    syncGradeComboboxFromSelect();
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    close();
+  });
+
+  document.addEventListener("click", () => close());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !list.hidden) {
+      close();
+    }
+  });
+
+  syncGradeComboboxFromSelect();
+}
 
 function loadSelectedGrade() {
   if (!dom.gradeSelect || !window.fetch) return;
@@ -1538,6 +1957,7 @@ loadLifetimeCorrectCount();
 applyDebugLifetimeFromQuery();
 initGameOptions();
 initGameOptionsCloseOnOutsideClick();
+initGradeCombobox();
 initGameIdleTimer();
 initTtsVoices();
 
@@ -1554,6 +1974,7 @@ initTtsVoices();
       const ok = loadWordsFromCsvText(text, "words/3rd-grade-words.csv (default)");
       if (!ok) return;
       if (dom.gradeSelect) dom.gradeSelect.value = "3rd";
+      syncGradeComboboxFromSelect();
       updateSelectedGradeHint("Built-in: 3rd grade (default)");
     })
     .catch(() => {
