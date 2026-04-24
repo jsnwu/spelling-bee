@@ -1236,9 +1236,16 @@ function filterAllowedVoices(voices) {
       bySlot.set(slot, v);
     }
   }
-  return ["aaron", "daniel", "oliver", "samantha"]
+  const all = ["aaron", "daniel", "oliver", "samantha"]
     .map((k) => bySlot.get(k))
     .filter(Boolean);
+
+  if (all.length > 2) {
+    const pruned = ["aaron", "samantha"].map((k) => bySlot.get(k)).filter(Boolean);
+    return pruned.length ? pruned : all.slice(0, 2);
+  }
+
+  return all;
 }
 
 function pickDefaultFemaleVoice(voices) {
